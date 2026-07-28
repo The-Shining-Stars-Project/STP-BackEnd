@@ -8,8 +8,13 @@ namespace CRM.Application.Services;
 public class StaffService : IStaffService
 {
     private readonly IUnitOfWork _uow;
+    private readonly IOrgClock _clock;
 
-    public StaffService(IUnitOfWork uow) => _uow = uow;
+    public StaffService(IUnitOfWork uow, IOrgClock clock)
+    {
+        _uow = uow;
+        _clock = clock;
+    }
 
     public async Task<IReadOnlyList<StaffSummaryDto>> GetAllAsync(CancellationToken ct = default)
     {
@@ -78,7 +83,7 @@ public class StaffService : IStaffService
             FullName = dto.FullName,
             Initials = dto.Initials,
             Role = dto.Role,
-            StartDate = dto.StartDate ?? DateTime.UtcNow,
+            StartDate = dto.StartDate ?? _clock.Today,
         };
 
         await _uow.Staff.AddAsync(member);
@@ -135,7 +140,7 @@ public class StaffService : IStaffService
         if (item is null) return null;
 
         item.IsCompleted = isCompleted;
-        item.CompletedDate = isCompleted ? DateTime.UtcNow.Date : null;
+        item.CompletedDate = isCompleted ? _clock.Today : null;
         await _uow.OnboardingItems.UpdateAsync(item);
         // Flush before recounting: ListAsync reads AsNoTracking, so an unsaved
         // toggle would come back with its old IsCompleted value.

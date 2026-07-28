@@ -1,4 +1,5 @@
 using CRM.Application.DTOs.Dashboard;
+using CRM.Application.Interfaces;
 using CRM.Application.Interfaces.Services;
 
 namespace CRM.Application.Services;
@@ -11,6 +12,7 @@ public class DashboardService : IDashboardService
     private readonly IStaffService _staff;
     private readonly IProgramService _programs;
     private readonly ICalendarService _calendar;
+    private readonly IOrgClock _clock;
 
     public DashboardService(
         IParticipantService participants,
@@ -18,8 +20,10 @@ public class DashboardService : IDashboardService
         ITaskService tasks,
         IStaffService staff,
         IProgramService programs,
-        ICalendarService calendar)
+        ICalendarService calendar,
+        IOrgClock clock)
     {
+        _clock = clock;
         _participants = participants;
         _attendance = attendance;
         _tasks = tasks;
@@ -36,7 +40,9 @@ public class DashboardService : IDashboardService
         //
         // The participant list and today's roster are program-scoped (#1): composing
         // several endpoints into one payload must not widen what any of them return.
-        var now = DateTime.UtcNow;
+        // "This month" is a local-calendar question (#7): on the 1st, UTC and Pacific
+        // disagree about which month it is for the first several hours of the day.
+        var now = _clock.Today;
         var next = now.AddMonths(1);
 
         var participants = await _participants.GetAllAsync(userId, ct);

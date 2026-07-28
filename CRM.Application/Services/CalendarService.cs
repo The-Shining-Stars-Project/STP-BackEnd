@@ -8,8 +8,13 @@ namespace CRM.Application.Services;
 public class CalendarService : ICalendarService
 {
     private readonly IUnitOfWork _uow;
+    private readonly IOrgClock _clock;
 
-    public CalendarService(IUnitOfWork uow) => _uow = uow;
+    public CalendarService(IUnitOfWork uow, IOrgClock clock)
+    {
+        _uow = uow;
+        _clock = clock;
+    }
 
     public async Task<IReadOnlyList<CalendarEventDto>> GetEventsAsync(int month, int year, CancellationToken ct = default)
     {
@@ -17,10 +22,11 @@ public class CalendarService : ICalendarService
         var programs = await _uow.Programs.GetAllAsync(ct);
         var programMap = programs.ToDictionary(p => p.Id, p => p.Name);
 
+        var today = _clock.Today;
         return events
             .Where(e => e.Date.Month == month && e.Date.Year == year)
             .OrderBy(e => e.Date)
-            .Select(e => ToDto(e, programMap))
+            .Select(e => ToDto(e, programMap, today))
             .ToList();
     }
 
@@ -37,7 +43,9 @@ public class CalendarService : ICalendarService
             Location = dto.Location,
             Meta = dto.Meta,
             TimeRange = dto.TimeRange,
-            IsUpcoming = date >= DateTime.UtcNow,
+            // Compare dates, not instants (#7): an event dated today is upcoming until the
+            // day is over, and "today" is a local question.
+            IsUpcoming = date.Date >= _clock.Today,
         };
 
         await _uow.CalendarEvents.AddAsync(ev);
@@ -46,10 +54,10 @@ public class CalendarService : ICalendarService
         var programs = await _uow.Programs.GetAllAsync();
         var programMap = programs.ToDictionary(p => p.Id, p => p.Name);
 
-        return ToDto(ev, programMap);
+        return ToDto(ev, programMap, _clock.Today);
     }
 
-    private static CalendarEventDto ToDto(CalendarEvent e, Dictionary<Guid, string> programMap) => new()
+    private static CalendarEventDto ToDto(CalendarEvent e, Dictionary<Guid, string> programMap, DateTime today) => new()
     {
         Id = e.Id,
         Title = e.Title,
@@ -59,6 +67,6 @@ public class CalendarService : ICalendarService
         TimeRange = e.TimeRange,
         ProgramId = e.ProgramId,
         ProgramName = e.ProgramId.HasValue ? programMap.GetValueOrDefault(e.ProgramId.Value) : null,
-        IsUpcoming = e.Date >= DateTime.UtcNow,
+        IsUpcoming = e.Date.Date >= today,
     };
 }

@@ -49,12 +49,14 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
     public FakeRepository<StaffMember> StaffRepo { get; } = new();
     public FakeRepository<CrmProgram> ProgramsRepo { get; } = new();
     public FakeRepository<User> UsersRepo { get; } = new();
+    public FakeRepository<PerStarPlan> PerStarPlansRepo { get; } = new();
     public List<StaffProgramAssignment> StaffProgramAssignments { get; } = new();
 
     public IRepository<Participant> Participants => ParticipantsRepo;
     public IRepository<StaffMember> Staff => StaffRepo;
     public IRepository<CrmProgram> Programs => ProgramsRepo;
     public IRepository<User> Users => UsersRepo;
+    public IRepository<PerStarPlan> PerStarPlans => PerStarPlansRepo;
 
     public IRepository<ObjectiveArea> ObjectiveAreas { get; } = new FakeRepository<ObjectiveArea>();
     public IRepository<SubSkill> SubSkills { get; } = new FakeRepository<SubSkill>();
@@ -73,7 +75,6 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
     public IRepository<MonthlySummary> MonthlySummaries { get; } = new FakeRepository<MonthlySummary>();
     public IRepository<GameIdea> GameIdeas { get; } = new FakeRepository<GameIdea>();
     public IRepository<AgeModification> AgeModifications { get; } = new FakeRepository<AgeModification>();
-    public IRepository<PerStarPlan> PerStarPlans { get; } = new FakeRepository<PerStarPlan>();
     public IRepository<CalendarTheme> CalendarThemes { get; } = new FakeRepository<CalendarTheme>();
     public IRepository<KeyArtsDate> KeyArtsDates { get; } = new FakeRepository<KeyArtsDate>();
     public IRepository<AttendanceRecord> Attendance { get; } = new FakeRepository<AttendanceRecord>();
@@ -108,6 +109,16 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
     public Task ReplaceScriptProgramsAsync(Guid scriptId, IReadOnlyCollection<Guid> programIds) => Task.CompletedTask;
 
     public Task<int> SaveChangesAsync() => Task.FromResult(0);
+}
+
+/// <summary>A clock frozen at a fixed local date, so date-dependent behaviour is deterministic.</summary>
+internal sealed class FakeOrgClock : IOrgClock
+{
+    public FakeOrgClock(DateTime? today = null) => Today = (today ?? new DateTime(2026, 7, 15)).Date;
+
+    public DateTime Today { get; }
+    public DateTime Now => Today.AddHours(17);
+    public DateTime UtcNow => DateTime.UtcNow;
 }
 
 /// <summary>No attendance history — the scoping tests don't assert on attendance percentages.</summary>

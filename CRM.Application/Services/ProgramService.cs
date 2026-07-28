@@ -12,11 +12,13 @@ public class ProgramService : IProgramService
 {
     private readonly IUnitOfWork _uow;
     private readonly IStatsQueries _stats;
+    private readonly IOrgClock _clock;
 
-    public ProgramService(IUnitOfWork uow, IStatsQueries stats)
+    public ProgramService(IUnitOfWork uow, IStatsQueries stats, IOrgClock clock)
     {
         _uow = uow;
         _stats = stats;
+        _clock = clock;
     }
 
     public async Task<IReadOnlyList<ProgramSummaryDto>> GetAllAsync(CancellationToken ct = default)
@@ -27,7 +29,10 @@ public class ProgramService : IProgramService
         // Attendance % from SQL aggregates (#8/#11); next session per program is a single
         // grouped query instead of loading every session ever created.
         var pctMap = AttendanceStats.PercentByParticipant(await _stats.GetParticipantAttendanceAsync(ct));
-        var nextByProgram = await _stats.GetNextSessionByProgramAsync(DateTime.UtcNow, ct);
+        // From the start of today, not the current instant (#7): sessions are stored as
+        // dates, so passing "now" hid today's own session from "next session" the moment
+        // the clock passed midnight UTC.
+        var nextByProgram = await _stats.GetNextSessionByProgramAsync(_clock.Today, ct);
 
         var ptsByProgram = participants
             .GroupBy(p => p.ProgramId)

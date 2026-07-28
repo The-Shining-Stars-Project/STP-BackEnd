@@ -5,6 +5,20 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace CRM.API.Controllers;
 
+/// <summary>
+/// Per-Star plans — a Star's monthly goal, priority skill, and how their teacher intends to
+/// support it.
+/// </summary>
+/// <remarks>
+/// Deliberately NOT behind the ManagementWrite policy: the teacher who runs the room writes
+/// these, so any signed-in staff member may author a plan for a child in a program they are
+/// assigned to. The program scoping in <see cref="IPlanningService"/> is what keeps that
+/// safe — it is the whole access control here, so do not remove it on the assumption that a
+/// role check is covering this endpoint.
+///
+/// Contrast with roster assignment (site, Star group, staffing), which is a management
+/// decision and does carry ManagementWrite.
+/// </remarks>
 [ApiController]
 [Authorize]
 [Route("api/planning")]

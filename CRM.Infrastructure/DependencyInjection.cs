@@ -20,6 +20,11 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher, PasswordHasher>();
         services.AddSingleton<ITokenService, TokenService>();
 
+        // --- Time ---
+        // "Today" is a local-calendar question, not a UTC one (#7).
+        services.Configure<Time.OrgTimeSettings>(configuration.GetSection(Time.OrgTimeSettings.SectionName));
+        services.AddSingleton<IOrgClock, Time.OrgClock>();
+
         // TODO: Register external service clients here (Blob storage, email, etc.)
 
         return services;

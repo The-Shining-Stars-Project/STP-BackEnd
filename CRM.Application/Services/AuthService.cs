@@ -58,9 +58,29 @@ public class AuthService : IAuthService
 
         var hash = HashRefreshToken(refreshToken);
         var stored = await _uow.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == hash);
-        if (stored is null || !stored.IsActive)
+        if (stored is null)
         {
-            _logger.LogWarning("Refresh rejected: token unknown, expired, or already used.");
+            _logger.LogWarning("Refresh rejected: token unknown.");
+            return null;
+        }
+
+        // Replay (#5): tokens are single-use, so presenting one that was already rotated
+        // away means two parties hold it — the legitimate client and whoever copied it.
+        // Refusing just this request would leave the thief's other tokens working, so kill
+        // every session the user has and force a fresh sign-in.
+        if (stored.RevokedAt is not null)
+        {
+            var killed = await RevokeActiveTokensAsync(stored.UserId);
+            await _uow.SaveChangesAsync();
+            _logger.LogWarning(
+                "Refresh token replay detected for user {UserId}; revoked {Count} active session(s).",
+                stored.UserId, killed);
+            return null;
+        }
+
+        if (!stored.IsActive)
+        {
+            _logger.LogWarning("Refresh rejected for user {UserId}: token expired.", stored.UserId);
             return null;
         }
 
@@ -121,6 +141,28 @@ public class AuthService : IAuthService
             RefreshToken = raw,
             RefreshExpiresAt = refresh.ExpiresAt,
         };
+    }
+
+    /// <summary>
+    /// Revokes every unrevoked refresh token for a user, optionally sparing one (the caller's
+    /// own session). Does not save — the caller decides the transaction boundary.
+    /// Returns how many were revoked.
+    /// </summary>
+    private async Task<int> RevokeActiveTokensAsync(Guid userId, string? exceptTokenHash = null)
+    {
+        var active = await _uow.RefreshTokens.ListAsync(t => t.UserId == userId && t.RevokedAt == null);
+        var now = DateTime.UtcNow;
+        var revoked = 0;
+
+        foreach (var token in active)
+        {
+            if (exceptTokenHash is not null && token.TokenHash == exceptTokenHash) continue;
+            token.RevokedAt = now;
+            await _uow.RefreshTokens.UpdateAsync(token);
+            revoked++;
+        }
+
+        return revoked;
     }
 
     private static string GenerateRefreshToken() =>
@@ -208,11 +250,19 @@ public class AuthService : IAuthService
         user.PasswordSalt = salt;
 
         await _uow.Users.UpdateAsync(user);
+
+        // An admin reset is the response to a compromised account, so every existing session
+        // dies — including the attacker's (#5). Without this their 14-day refresh token keeps
+        // minting JWTs long after the password they stole stopped working.
+        var revoked = await RevokeActiveTokensAsync(id);
+
         await _uow.SaveChangesAsync();
+        _logger.LogInformation(
+            "Password reset for user {UserId}; revoked {Count} active session(s).", id, revoked);
         return true;
     }
 
-    public async Task<bool> ChangePasswordAsync(Guid userId, ChangePasswordDto dto)
+    public async Task<bool> ChangePasswordAsync(Guid userId, ChangePasswordDto dto, string? currentRefreshToken = null)
     {
         var user = await _uow.Users.GetByIdAsync(userId);
         if (user is null) return false;
@@ -227,7 +277,19 @@ public class AuthService : IAuthService
         user.PasswordSalt = salt;
 
         await _uow.Users.UpdateAsync(user);
+
+        // Signing out everywhere else is the point of changing a password (#5). The tab the
+        // change was made from keeps working — its token is spared when the caller supplies
+        // it, which is what every mainstream app does and avoids logging people out of the
+        // page they are looking at.
+        var keep = string.IsNullOrWhiteSpace(currentRefreshToken)
+            ? null
+            : HashRefreshToken(currentRefreshToken);
+        var revoked = await RevokeActiveTokensAsync(userId, keep);
+
         await _uow.SaveChangesAsync();
+        _logger.LogInformation(
+            "User {UserId} changed their password; revoked {Count} other session(s).", userId, revoked);
         return true;
     }
 

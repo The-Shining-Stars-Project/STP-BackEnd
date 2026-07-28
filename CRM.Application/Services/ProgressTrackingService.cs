@@ -10,11 +10,13 @@ public class ProgressTrackingService : IProgressTrackingService
 {
     private readonly IUnitOfWork _uow;
     private readonly IProgramAccessService _access;
+    private readonly IOrgClock _clock;
 
-    public ProgressTrackingService(IUnitOfWork uow, IProgramAccessService access)
+    public ProgressTrackingService(IUnitOfWork uow, IProgramAccessService access, IOrgClock clock)
     {
         _uow = uow;
         _access = access;
+        _clock = clock;
     }
 
     public async Task<IReadOnlyList<WeeklyFocusSkillDto>> GetFocusSkillsAsync(Guid currentUserId, Guid programId, string monthKey)
@@ -76,7 +78,9 @@ public class ProgressTrackingService : IProgressTrackingService
             e.ParticipantId == dto.ParticipantId && e.SubSkillId == dto.SubSkillId &&
             e.MonthKey == dto.MonthKey && e.WeekNumber == dto.WeekNumber)).FirstOrDefault();
 
-        var weekDate = ParseDate(dto.WeekDate) ?? DateTime.UtcNow.Date;
+        // A score recorded during an evening session belongs to that day locally, not to
+        // the next UTC day (#7).
+        var weekDate = ParseDate(dto.WeekDate) ?? _clock.Today;
 
         if (existing is null)
         {

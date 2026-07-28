@@ -34,15 +34,21 @@ public interface IAuthService
     /// </summary>
     Task<UserDto?> UpdateUserAsync(Guid id, UpdateUserDto dto, Guid actingUserId);
 
-    /// <summary>Sets a new password for a user. Returns false if the user is not found.</summary>
+    /// <summary>
+    /// Sets a new password for a user (admin action) and revokes every one of their active
+    /// sessions (#5). Returns false if the user is not found.
+    /// </summary>
     Task<bool> ResetPasswordAsync(Guid id, ResetPasswordDto dto);
 
     /// <summary>
     /// Self-service password change: verifies the caller's current password before
-    /// setting the new one. Returns false if not found; throws InvalidOperationException
-    /// if the current password is wrong or the new password is invalid.
+    /// setting the new one, then revokes their other sessions (#5). Pass the caller's own
+    /// refresh token as <paramref name="currentRefreshToken"/> to spare the session making
+    /// the change; omit it to sign the user out everywhere. Returns false if not found;
+    /// throws InvalidOperationException if the current password is wrong or the new
+    /// password is invalid.
     /// </summary>
-    Task<bool> ChangePasswordAsync(Guid userId, ChangePasswordDto dto);
+    Task<bool> ChangePasswordAsync(Guid userId, ChangePasswordDto dto, string? currentRefreshToken = null);
 
     /// <summary>Deletes a user. Returns false if not found; throws on a guard violation.</summary>
     Task<bool> DeleteUserAsync(Guid id, Guid actingUserId);

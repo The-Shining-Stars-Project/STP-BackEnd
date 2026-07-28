@@ -11,9 +11,9 @@ namespace CRM.Tests;
 
 /// <summary>
 /// The regression suite for #1 — a teacher assigned to one program must not be able to read
-/// or write another program's children, by any route. Every test drives the real services
-/// against a real (SQLite in-memory) database, so it fails if the scoping is removed from
-/// either the service or the shared <see cref="IProgramAccessService"/>.
+/// or write another program's children, by any route. Every test drives the real service
+/// implementations over in-memory repositories, so it fails if the scoping is removed from
+/// either a service or the shared <see cref="IProgramAccessService"/>.
 /// </summary>
 public class ProgramScopingTests
 {
@@ -66,8 +66,8 @@ public class ProgramScopingTests
         _access = new ProgramAccessService(_uow);
     }
 
-    private ParticipantService Participants() => new(_uow, new FakeStatsQueries(), _access);
-    private ProgressTrackingService Progress() => new(_uow, _access);
+    private ParticipantService Participants() => new(_uow, new FakeStatsQueries(), _access, new FakeOrgClock());
+    private ProgressTrackingService Progress() => new(_uow, _access, new FakeOrgClock());
     private ArtsProfileService ArtsProfile() => new(_uow, _access);
     private RosterService Roster() => new(_uow, _access);
     private PlanningService Planning() => new(_uow, _access);
@@ -344,5 +344,52 @@ public class ProgramScopingTests
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
             () => Planning().UpsertPerStarPlanAsync(TeacherAUser, dto));
+    }
+
+    // Per-Star plans are authored by the teacher who runs the room, so there is deliberately
+    // no ManagementWrite gate on that endpoint — program scope is the only thing guarding it.
+    //
+    // These two pin the service half of that decision: a plain staff account, scoped to its
+    // own program, can create and revise a plan. They do NOT see the controller's attributes,
+    // so adding [Authorize(Policy = "ManagementWrite")] to PlanningController would still
+    // leave them green — the remarks on that controller are what guard the attribute.
+
+    [Fact]
+    public async Task A_teacher_can_write_a_plan_for_a_child_in_their_own_program()
+    {
+        var dto = new UpsertPerStarPlanDto
+        {
+            ParticipantId = ChildInA,
+            MonthKey = "2026-07",
+            MonthlyGoal = "Take a turn without prompting",
+            HowIllSupport = "Pair with a peer during warm-up games",
+        };
+
+        var plan = await Planning().UpsertPerStarPlanAsync(TeacherAUser, dto);
+
+        Assert.NotNull(plan);
+        Assert.Equal(ChildInA, plan.ParticipantId);
+        Assert.Equal("Take a turn without prompting", plan.MonthlyGoal);
+    }
+
+    [Fact]
+    public async Task A_teacher_can_revise_a_plan_they_already_wrote()
+    {
+        var planning = Planning();
+        var dto = new UpsertPerStarPlanDto
+        {
+            ParticipantId = ChildInA,
+            MonthKey = "2026-07",
+            MonthlyGoal = "First draft",
+        };
+
+        await planning.UpsertPerStarPlanAsync(TeacherAUser, dto);
+        dto.MonthlyGoal = "Revised after week one";
+        var revised = await planning.UpsertPerStarPlanAsync(TeacherAUser, dto);
+
+        Assert.NotNull(revised);
+        Assert.Equal("Revised after week one", revised.MonthlyGoal);
+        // Revised in place rather than duplicated — one plan per Star per month.
+        Assert.Single(_uow.PerStarPlansRepo.Items);
     }
 }

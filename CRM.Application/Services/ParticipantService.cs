@@ -10,12 +10,14 @@ public class ParticipantService : IParticipantService
     private readonly IUnitOfWork _uow;
     private readonly IStatsQueries _stats;
     private readonly IProgramAccessService _access;
+    private readonly IOrgClock _clock;
 
-    public ParticipantService(IUnitOfWork uow, IStatsQueries stats, IProgramAccessService access)
+    public ParticipantService(IUnitOfWork uow, IStatsQueries stats, IProgramAccessService access, IOrgClock clock)
     {
         _uow = uow;
         _stats = stats;
         _access = access;
+        _clock = clock;
     }
 
     public async Task<IReadOnlyList<ParticipantSummaryDto>> GetAllAsync(Guid userId, CancellationToken ct = default)
@@ -79,7 +81,7 @@ public class ParticipantService : IParticipantService
             Status = dto.Status,
             BirthYear = dto.BirthYear,
             ServiceCoordinator = dto.ServiceCoordinator,
-            StartDate = dto.StartDate ?? DateTime.UtcNow,
+            StartDate = dto.StartDate ?? _clock.Today,
         };
 
         await _uow.Participants.AddAsync(participant);

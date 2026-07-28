@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using CRM.Application.DTOs.Attendance;
+using CRM.Application.Interfaces;
 using CRM.Application.Interfaces.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,8 +13,13 @@ namespace CRM.API.Controllers;
 public class AttendanceController : ControllerBase
 {
     private readonly IAttendanceService _service;
+    private readonly IOrgClock _clock;
 
-    public AttendanceController(IAttendanceService service) => _service = service;
+    public AttendanceController(IAttendanceService service, IOrgClock clock)
+    {
+        _service = service;
+        _clock = clock;
+    }
 
     // GET today was removed (#2): it returned every program's participants to any signed-in
     // user, and — being a GET that lazily created sessions and records — let a prefetch open
@@ -26,7 +32,7 @@ public class AttendanceController : ControllerBase
     [HttpGet("scheduled")]
     public async Task<ActionResult<IReadOnlyList<ScheduledSessionDto>>> GetScheduled([FromQuery] DateTime? date)
     {
-        var when = date?.Date ?? DateTime.UtcNow.Date;
+        var when = date?.Date ?? _clock.Today;
         return Ok(await _service.GetScheduledForUserAsync(User.GetUserId(), when));
     }
 
@@ -38,7 +44,7 @@ public class AttendanceController : ControllerBase
     public async Task<ActionResult<SessionRosterDto>> GetSessionByProgram(
         [FromQuery] Guid programId, [FromQuery] DateTime? date)
     {
-        var when = date?.Date ?? DateTime.UtcNow.Date;
+        var when = date?.Date ?? _clock.Today;
         try
         {
             var roster = await _service.GetProgramSessionReadOnlyAsync(User.GetUserId(), programId, when);
@@ -54,7 +60,7 @@ public class AttendanceController : ControllerBase
     [HttpPost("session")]
     public async Task<ActionResult<SessionRosterDto>> OpenSession([FromBody] OpenSessionDto dto)
     {
-        var when = dto.Date?.Date ?? DateTime.UtcNow.Date;
+        var when = dto.Date?.Date ?? _clock.Today;
         try
         {
             var roster = await _service.GetOrCreateSessionAsync(User.GetUserId(), dto.ProgramId, when);

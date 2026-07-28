@@ -10,11 +10,13 @@ public class AttendanceService : IAttendanceService
 {
     private readonly IUnitOfWork _uow;
     private readonly IProgramAccessService _access;
+    private readonly IOrgClock _clock;
 
-    public AttendanceService(IUnitOfWork uow, IProgramAccessService access)
+    public AttendanceService(IUnitOfWork uow, IProgramAccessService access, IOrgClock clock)
     {
         _uow = uow;
         _access = access;
+        _clock = clock;
     }
 
     public async Task<AttendanceSessionDto?> GetSessionAsync(Guid userId, Guid sessionId)
@@ -278,7 +280,7 @@ public class AttendanceService : IAttendanceService
         (await _access.ForUserAsync(userId)).Require(session.ProgramId);
 
         session.Status = SessionStatus.Submitted;
-        session.SubmittedAt = DateTime.UtcNow;
+        session.SubmittedAt = _clock.UtcNow;   // an instant, so UTC is correct
         await _uow.Sessions.UpdateAsync(session);
         await _uow.SaveChangesAsync();
         return true;
@@ -287,7 +289,9 @@ public class AttendanceService : IAttendanceService
     public async Task<IReadOnlyList<AttendanceRosterEntryDto>> GetTodayRosterReadOnlyAsync(
         Guid userId, CancellationToken ct = default)
     {
-        var today = DateTime.UtcNow.Date;
+        // The organisation's today, not UTC's (#7) — an afternoon session in California is
+        // already "tomorrow" in UTC for part of the year.
+        var today = _clock.Today;
         var tomorrow = today.AddDays(1);
 
         // Scoped to the caller's programs (#1). Filtering the sessions is enough — every

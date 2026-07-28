@@ -23,19 +23,35 @@ public class GlobalExceptionHandler : IExceptionHandler
         {
             UnauthorizedAccessException => (StatusCodes.Status403Forbidden, "Forbidden"),
             DbUpdateConcurrencyException => (StatusCodes.Status409Conflict, "Conflict"),
+            // Must stay below DbUpdateConcurrencyException — it derives from this.
+            DbUpdateException => (StatusCodes.Status409Conflict, "Conflict"),
             InvalidOperationException => (StatusCodes.Status409Conflict, "Conflict"),
             KeyNotFoundException => (StatusCodes.Status404NotFound, "Not found"),
             _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred"),
         };
 
-        // RowVersion mismatch (#26): someone saved this row after we read it. EF's message
-        // is developer-speak, so substitute a user-facing one.
-        var detail = exception is DbUpdateConcurrencyException
-            ? "This item was changed by someone else while you were editing. Refresh and try again."
-            : exception.Message;
+        // EF's own messages here are developer-speak ("See the inner exception for details"),
+        // so substitute user-facing text.
+        var detail = exception switch
+        {
+            // RowVersion mismatch (#26): someone saved this row after we read it.
+            DbUpdateConcurrencyException =>
+                "This item was changed by someone else while you were editing. Refresh and try again.",
+            // Usually a unique-index violation — e.g. two submissions of the same weekly
+            // score racing each other (#6). Saving again after a refresh resolves it.
+            DbUpdateException =>
+                "That change conflicts with data already saved. Refresh and try again.",
+            _ => exception.Message,
+        };
 
         if (status == StatusCodes.Status500InternalServerError)
             _logger.LogError(exception, "Unhandled exception for {Method} {Path}.",
+                httpContext.Request.Method, httpContext.Request.Path);
+        else if (exception is DbUpdateException)
+            // Log the exception object, not just its message: the useful part is the inner
+            // SqlException, and a benign unique-violation is indistinguishable from a real
+            // FK bug without it.
+            _logger.LogWarning(exception, "Database rejected a write for {Method} {Path}.",
                 httpContext.Request.Method, httpContext.Request.Path);
         else
             _logger.LogWarning("Business-rule rejection ({Status}) for {Method} {Path}: {Message}",

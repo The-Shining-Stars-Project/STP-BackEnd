@@ -13,6 +13,19 @@ using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Don't advertise the server implementation (#7).
+builder.WebHost.ConfigureKestrel(options => options.AddServerHeader = false);
+
+// HSTS (#7): once a browser has seen this, it refuses to talk to the API over plain HTTP.
+// No preload and no includeSubDomains — the app lives on a shared azurewebsites.net suffix
+// and neither is needed here. UseHsts() below already skips localhost.
+builder.Services.AddHsts(options =>
+{
+    options.MaxAge = TimeSpan.FromDays(365);
+    options.IncludeSubDomains = false;
+    options.Preload = false;
+});
+
 // ---------------------------------------------------------
 // Register services from each layer via extension methods
 // ---------------------------------------------------------
@@ -202,15 +215,36 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-// Apply pending migrations on startup.
-// NOTE (#12): migrate-at-startup races across multiple instances and takes the app
-// down on a bad migration. Preferred long-term fix is to run `dotnet ef database update`
-// as a deployment step and remove this block. Kept for now so single-instance deploys
-// continue to migrate automatically.
+// Apply pending migrations on startup (#12).
+//
+// EF Core 7+ takes a database-level lock (sp_getapplock on SQL Server) for the duration of
+// a migration, so parallel instances queue behind each other instead of racing — the
+// original concern here is handled by the framework. What remains is that a bad migration
+// takes the app down at boot instead of failing a deployment step, so this is now
+// switchable: run `dotnet ef database update --project CRM.Persistence --startup-project
+// CRM.API` from your release pipeline and set Database:MigrateOnStartup to false
+// (Azure App Service setting: Database__MigrateOnStartup). Defaults to true so existing
+// deploys keep working untouched.
+var migrateOnStartup = builder.Configuration.GetValue("Database:MigrateOnStartup", true);
+
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await db.Database.MigrateAsync();
+
+    if (migrateOnStartup)
+    {
+        await db.Database.MigrateAsync();
+    }
+    else
+    {
+        // Seeders below assume the schema is current; say so plainly rather than failing
+        // later with a confusing "invalid column name".
+        var pending = (await db.Database.GetPendingMigrationsAsync()).ToList();
+        if (pending.Count > 0)
+            throw new InvalidOperationException(
+                $"Database:MigrateOnStartup is false but {pending.Count} migration(s) are pending "
+                + $"({string.Join(", ", pending)}). Run `dotnet ef database update` before deploying.");
+    }
 
     // The Games Library is real reference data (the ~57 games from the programming
     // calendar), so it is seeded in every environment. It is idempotent — it no-ops once
@@ -244,6 +278,12 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseExceptionHandler();
+
+// Headers first, so error responses carry them too (#7).
+app.UseSecurityHeaders(app.Environment);
+if (!app.Environment.IsDevelopment())
+    app.UseHsts();
+
 app.UseHttpsRedirection();
 app.UseCors("FrontendPolicy");
 app.UseRateLimiter();

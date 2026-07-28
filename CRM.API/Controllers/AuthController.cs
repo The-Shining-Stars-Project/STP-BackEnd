@@ -176,14 +176,18 @@ public class AuthController : ControllerBase
         }
     }
 
-    /// <summary>Changes the signed-in user's own password.</summary>
+    /// <summary>
+    /// Changes the signed-in user's own password. Their other sessions are revoked (#5);
+    /// this one survives, which is why the refresh cookie is passed through.
+    /// </summary>
     [HttpPost("change-password")]
     [Authorize]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto dto)
     {
         try
         {
-            var ok = await _service.ChangePasswordAsync(User.GetUserId(), dto);
+            var ok = await _service.ChangePasswordAsync(
+                User.GetUserId(), dto, Request.Cookies[RefreshCookie]);
             return ok ? NoContent() : Unauthorized();
         }
         catch (InvalidOperationException ex)
