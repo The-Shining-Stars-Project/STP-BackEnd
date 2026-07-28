@@ -28,16 +28,19 @@ public class DashboardService : IDashboardService
         _calendar = calendar;
     }
 
-    public async Task<DashboardDto> GetAsync(CancellationToken ct = default)
+    public async Task<DashboardDto> GetAsync(Guid userId, CancellationToken ct = default)
     {
         // Runs sequentially on a single DbContext (EF contexts aren't concurrent), but
         // collapses seven HTTP round-trips into one and uses the read-only roster so the
         // dashboard never triggers the attendance lazy-create write path.
+        //
+        // The participant list and today's roster are program-scoped (#1): composing
+        // several endpoints into one payload must not widen what any of them return.
         var now = DateTime.UtcNow;
         var next = now.AddMonths(1);
 
-        var participants = await _participants.GetAllAsync(ct);
-        var roster = await _attendance.GetTodayRosterReadOnlyAsync(ct);
+        var participants = await _participants.GetAllAsync(userId, ct);
+        var roster = await _attendance.GetTodayRosterReadOnlyAsync(userId, ct);
         var projects = await _tasks.GetProjectsAsync(ct);
         var staff = await _staff.GetAllAsync(ct);
         var programs = await _programs.GetAllAsync(ct);

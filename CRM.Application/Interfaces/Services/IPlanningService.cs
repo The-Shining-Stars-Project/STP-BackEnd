@@ -4,9 +4,12 @@ namespace CRM.Application.Interfaces.Services;
 
 public interface IPlanningService
 {
-    /// <summary>Every participant's per-Star plan row for a month (optionally scoped to one program).</summary>
-    Task<IReadOnlyList<PerStarPlanDto>> GetPerStarPlansAsync(string monthKey, Guid? programId);
+    /// <summary>
+    /// Per-Star plan rows for a month, limited to the caller's programs (#1).
+    /// Optionally narrowed further to a single program.
+    /// </summary>
+    Task<IReadOnlyList<PerStarPlanDto>> GetPerStarPlansAsync(Guid userId, string monthKey, Guid? programId);
 
-    /// <summary>Creates or updates a participant's plan for a month.</summary>
-    Task<PerStarPlanDto> UpsertPerStarPlanAsync(UpsertPerStarPlanDto dto);
+    /// <summary>Creates or updates a participant's plan for a month. Null if the participant doesn't exist.</summary>
+    Task<PerStarPlanDto?> UpsertPerStarPlanAsync(Guid userId, UpsertPerStarPlanDto dto);
 }

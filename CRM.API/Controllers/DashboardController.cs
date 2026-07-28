@@ -14,7 +14,8 @@ public class DashboardController : ControllerBase
 
     public DashboardController(IDashboardService service) => _service = service;
 
-    /// <summary>The full dashboard payload in one request.</summary>
+    /// <summary>The full dashboard payload in one request, scoped to the caller's programs.</summary>
     [HttpGet]
-    public async Task<ActionResult<DashboardDto>> Get(CancellationToken ct) => Ok(await _service.GetAsync(ct));
+    public async Task<ActionResult<DashboardDto>> Get(CancellationToken ct) =>
+        Ok(await _service.GetAsync(User.GetUserId(), ct));
 }

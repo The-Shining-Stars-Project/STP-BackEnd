@@ -8,12 +8,17 @@ namespace CRM.Application.Services;
 public class ArtsProfileService : IArtsProfileService
 {
     private readonly IUnitOfWork _uow;
+    private readonly IProgramAccessService _access;
 
-    public ArtsProfileService(IUnitOfWork uow) => _uow = uow;
-
-    public async Task<ParticipantArtsProfileDto?> GetAsync(Guid participantId)
+    public ArtsProfileService(IUnitOfWork uow, IProgramAccessService access)
     {
-        var participant = await _uow.Participants.GetByIdAsync(participantId);
+        _uow = uow;
+        _access = access;
+    }
+
+    public async Task<ParticipantArtsProfileDto?> GetAsync(Guid currentUserId, Guid participantId)
+    {
+        var participant = await _access.RequireParticipantAsync(currentUserId, participantId);
         if (participant is null) return null;
 
         var profile = await _uow.ParticipantArtsProfiles.FirstOrDefaultAsync(p => p.ParticipantId == participantId);
@@ -22,9 +27,9 @@ public class ArtsProfileService : IArtsProfileService
             : ToDto(profile);
     }
 
-    public async Task<ParticipantArtsProfileDto?> UpsertAsync(Guid participantId, UpsertArtsProfileDto dto)
+    public async Task<ParticipantArtsProfileDto?> UpsertAsync(Guid currentUserId, Guid participantId, UpsertArtsProfileDto dto)
     {
-        var participant = await _uow.Participants.GetByIdAsync(participantId);
+        var participant = await _access.RequireParticipantAsync(currentUserId, participantId);
         if (participant is null) return null;
 
         var profile = await _uow.ParticipantArtsProfiles.FirstOrDefaultAsync(p => p.ParticipantId == participantId);

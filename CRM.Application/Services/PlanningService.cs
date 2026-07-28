@@ -8,12 +8,24 @@ namespace CRM.Application.Services;
 public class PlanningService : IPlanningService
 {
     private readonly IUnitOfWork _uow;
+    private readonly IProgramAccessService _access;
 
-    public PlanningService(IUnitOfWork uow) => _uow = uow;
-
-    public async Task<IReadOnlyList<PerStarPlanDto>> GetPerStarPlansAsync(string monthKey, Guid? programId)
+    public PlanningService(IUnitOfWork uow, IProgramAccessService access)
     {
-        var participants = await _uow.Participants.GetAllAsync();
+        _uow = uow;
+        _access = access;
+    }
+
+    public async Task<IReadOnlyList<PerStarPlanDto>> GetPerStarPlansAsync(Guid userId, string monthKey, Guid? programId)
+    {
+        // Plans name a child's goals and support needs, so the list is scoped to the
+        // caller's programs (#1) before the optional single-program narrowing is applied.
+        var access = await _access.ForUserAsync(userId);
+        if (programId is { } requested) access.Require(requested);
+
+        var participants = (await _uow.Participants.GetAllAsync())
+            .Where(p => access.CanAccess(p.ProgramId))
+            .ToList();
         if (programId is { } pid) participants = participants.Where(p => p.ProgramId == pid).ToList();
 
         var ctx = await LoadContextAsync(monthKey);
@@ -24,8 +36,11 @@ public class PlanningService : IPlanningService
             .ToList();
     }
 
-    public async Task<PerStarPlanDto> UpsertPerStarPlanAsync(UpsertPerStarPlanDto dto)
+    public async Task<PerStarPlanDto?> UpsertPerStarPlanAsync(Guid userId, UpsertPerStarPlanDto dto)
     {
+        var participant = await _access.RequireParticipantAsync(userId, dto.ParticipantId);
+        if (participant is null) return null;
+
         var existing = (await _uow.PerStarPlans.ListAsync(
             p => p.ParticipantId == dto.ParticipantId && p.MonthKey == dto.MonthKey)).FirstOrDefault();
 
@@ -60,8 +75,6 @@ public class PlanningService : IPlanningService
         await _uow.SaveChangesAsync();
 
         var ctx = await LoadContextAsync(dto.MonthKey);
-        var participant = await _uow.Participants.GetByIdAsync(dto.ParticipantId)
-                          ?? throw new ArgumentException($"Participant {dto.ParticipantId} not found.");
         return BuildDto(participant, existing, dto.MonthKey, ctx);
     }
 

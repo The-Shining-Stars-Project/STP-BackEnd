@@ -9,11 +9,18 @@ namespace CRM.Application.Services;
 public class ProgressTrackingService : IProgressTrackingService
 {
     private readonly IUnitOfWork _uow;
+    private readonly IProgramAccessService _access;
 
-    public ProgressTrackingService(IUnitOfWork uow) => _uow = uow;
-
-    public async Task<IReadOnlyList<WeeklyFocusSkillDto>> GetFocusSkillsAsync(Guid programId, string monthKey)
+    public ProgressTrackingService(IUnitOfWork uow, IProgramAccessService access)
     {
+        _uow = uow;
+        _access = access;
+    }
+
+    public async Task<IReadOnlyList<WeeklyFocusSkillDto>> GetFocusSkillsAsync(Guid currentUserId, Guid programId, string monthKey)
+    {
+        (await _access.ForUserAsync(currentUserId)).Require(programId);
+
         var focus = await _uow.WeeklyFocusSkills.ListAsync(f => f.ProgramId == programId && f.MonthKey == monthKey);
         var skills = await SubSkillMapAsync();
         return focus
@@ -23,8 +30,10 @@ public class ProgressTrackingService : IProgressTrackingService
             .ToList();
     }
 
-    public async Task<IReadOnlyList<WeeklyFocusSkillDto>> SetFocusSkillsAsync(SetFocusSkillsDto dto)
+    public async Task<IReadOnlyList<WeeklyFocusSkillDto>> SetFocusSkillsAsync(Guid currentUserId, SetFocusSkillsDto dto)
     {
+        (await _access.ForUserAsync(currentUserId)).Require(dto.ProgramId);
+
         // Diff against what's stored instead of delete-all-then-reinsert (#28): unchanged
         // rows are left untouched, so a no-op save issues no writes at all.
         var existing = await _uow.WeeklyFocusSkills.ListAsync(
@@ -57,8 +66,10 @@ public class ProgressTrackingService : IProgressTrackingService
         return kept.Select(f => ToFocusDto(f, skills)).ToList();
     }
 
-    public async Task<WeeklyDataEntryDto> RecordWeeklyScoreAsync(Guid currentUserId, RecordWeeklyScoreDto dto)
+    public async Task<WeeklyDataEntryDto?> RecordWeeklyScoreAsync(Guid currentUserId, RecordWeeklyScoreDto dto)
     {
+        if (await _access.RequireParticipantAsync(currentUserId, dto.ParticipantId) is null) return null;
+
         var recordedBy = await ResolveStaffIdAsync(currentUserId);
 
         var existing = (await _uow.WeeklyDataEntries.ListAsync(e =>
@@ -95,9 +106,9 @@ public class ProgressTrackingService : IProgressTrackingService
         return ToEntryDto(existing);
     }
 
-    public async Task<StarMonthDto?> GetStarMonthAsync(Guid participantId, string monthKey)
+    public async Task<StarMonthDto?> GetStarMonthAsync(Guid currentUserId, Guid participantId, string monthKey)
     {
-        if (await _uow.Participants.GetByIdAsync(participantId) is null) return null;
+        if (await _access.RequireParticipantAsync(currentUserId, participantId) is null) return null;
 
         var entries = await _uow.WeeklyDataEntries.ListAsync(e => e.ParticipantId == participantId && e.MonthKey == monthKey);
         var snaps = await _uow.MonthlyProgressSnapshots.ListAsync(s => s.ParticipantId == participantId && s.MonthKey == monthKey);
@@ -127,9 +138,9 @@ public class ProgressTrackingService : IProgressTrackingService
         };
     }
 
-    public async Task<WeeklyNoteSelectionDto?> UpsertNoteSelectionAsync(Guid participantId, string monthKey, UpsertNoteSelectionDto dto)
+    public async Task<WeeklyNoteSelectionDto?> UpsertNoteSelectionAsync(Guid currentUserId, Guid participantId, string monthKey, UpsertNoteSelectionDto dto)
     {
-        if (await _uow.Participants.GetByIdAsync(participantId) is null) return null;
+        if (await _access.RequireParticipantAsync(currentUserId, participantId) is null) return null;
 
         var note = (await _uow.WeeklyNoteSelections.ListAsync(n =>
             n.ParticipantId == participantId && n.MonthKey == monthKey &&
@@ -161,9 +172,9 @@ public class ProgressTrackingService : IProgressTrackingService
         return ToNoteDto(note, await GoalBankTextMapAsync());
     }
 
-    public async Task<MonthlySummaryDto?> UpsertMonthlySummaryAsync(Guid participantId, string monthKey, UpsertMonthlySummaryDto dto)
+    public async Task<MonthlySummaryDto?> UpsertMonthlySummaryAsync(Guid currentUserId, Guid participantId, string monthKey, UpsertMonthlySummaryDto dto)
     {
-        if (await _uow.Participants.GetByIdAsync(participantId) is null) return null;
+        if (await _access.RequireParticipantAsync(currentUserId, participantId) is null) return null;
 
         var summary = (await _uow.MonthlySummaries.ListAsync(m => m.ParticipantId == participantId && m.MonthKey == monthKey)).FirstOrDefault();
 
@@ -193,9 +204,9 @@ public class ProgressTrackingService : IProgressTrackingService
         return ToSummaryDto(summary);
     }
 
-    public async Task<IReadOnlyList<MonthlyProgressSnapshotDto>?> ComputeMonthEndAsync(Guid participantId, string monthKey)
+    public async Task<IReadOnlyList<MonthlyProgressSnapshotDto>?> ComputeMonthEndAsync(Guid currentUserId, Guid participantId, string monthKey)
     {
-        if (await _uow.Participants.GetByIdAsync(participantId) is null) return null;
+        if (await _access.RequireParticipantAsync(currentUserId, participantId) is null) return null;
 
         var skills = (await _uow.SubSkills.GetAllAsync()).Where(s => s.IsActive).ToList();
         var entries = await _uow.WeeklyDataEntries.ListAsync(e => e.ParticipantId == participantId && e.MonthKey == monthKey);
@@ -250,7 +261,7 @@ public class ProgressTrackingService : IProgressTrackingService
 
     public async Task<MonthlyProgressSnapshotDto?> ConfirmMonthEndAsync(Guid currentUserId, Guid participantId, string monthKey, ConfirmMonthEndDto dto)
     {
-        if (await _uow.Participants.GetByIdAsync(participantId) is null) return null;
+        if (await _access.RequireParticipantAsync(currentUserId, participantId) is null) return null;
         var confirmedBy = await ResolveStaffIdAsync(currentUserId);
 
         var snap = (await _uow.MonthlyProgressSnapshots.ListAsync(s =>

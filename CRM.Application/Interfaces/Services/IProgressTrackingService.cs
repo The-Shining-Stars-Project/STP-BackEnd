@@ -2,29 +2,34 @@ using CRM.Application.DTOs.Progress;
 
 namespace CRM.Application.Interfaces.Services;
 
+/// <summary>
+/// Assessment data for individual children. Every method takes the calling user and is
+/// scoped to their programs (#1) — the <c>userId</c> here is an authorization input, not
+/// only the audit stamp it used to be.
+/// </summary>
 public interface IProgressTrackingService
 {
     /// <summary>The focus skills set for a program across a month (all weeks).</summary>
-    Task<IReadOnlyList<WeeklyFocusSkillDto>> GetFocusSkillsAsync(Guid programId, string monthKey);
+    Task<IReadOnlyList<WeeklyFocusSkillDto>> GetFocusSkillsAsync(Guid currentUserId, Guid programId, string monthKey);
 
     /// <summary>Replaces the focus skills for one program-week; returns the new set.</summary>
-    Task<IReadOnlyList<WeeklyFocusSkillDto>> SetFocusSkillsAsync(SetFocusSkillsDto dto);
+    Task<IReadOnlyList<WeeklyFocusSkillDto>> SetFocusSkillsAsync(Guid currentUserId, SetFocusSkillsDto dto);
 
     /// <summary>Records (upserts) one weekly Data score for a Star on a sub-skill; stamps the recorder from the caller.</summary>
-    Task<WeeklyDataEntryDto> RecordWeeklyScoreAsync(Guid currentUserId, RecordWeeklyScoreDto dto);
+    Task<WeeklyDataEntryDto?> RecordWeeklyScoreAsync(Guid currentUserId, RecordWeeklyScoreDto dto);
 
     /// <summary>A Star's full month: weekly entries + month-end snapshots. Null if the participant doesn't exist.</summary>
-    Task<StarMonthDto?> GetStarMonthAsync(Guid participantId, string monthKey);
+    Task<StarMonthDto?> GetStarMonthAsync(Guid currentUserId, Guid participantId, string monthKey);
 
     /// <summary>(Re)derives suggested month-end levels for every active sub-skill; preserves confirmed levels. Null if the participant doesn't exist.</summary>
-    Task<IReadOnlyList<MonthlyProgressSnapshotDto>?> ComputeMonthEndAsync(Guid participantId, string monthKey);
+    Task<IReadOnlyList<MonthlyProgressSnapshotDto>?> ComputeMonthEndAsync(Guid currentUserId, Guid participantId, string monthKey);
 
     /// <summary>Confirms (or overrides) a Star's month-end level for one sub-skill; stamps the confirmer from the caller. Null if the participant doesn't exist.</summary>
     Task<MonthlyProgressSnapshotDto?> ConfirmMonthEndAsync(Guid currentUserId, Guid participantId, string monthKey, ConfirmMonthEndDto dto);
 
     /// <summary>Records (upserts) a Section-6 note for a Star in one week. Null if the participant doesn't exist.</summary>
-    Task<WeeklyNoteSelectionDto?> UpsertNoteSelectionAsync(Guid participantId, string monthKey, UpsertNoteSelectionDto dto);
+    Task<WeeklyNoteSelectionDto?> UpsertNoteSelectionAsync(Guid currentUserId, Guid participantId, string monthKey, UpsertNoteSelectionDto dto);
 
     /// <summary>Creates or updates a Star's monthly summary. Null if the participant doesn't exist.</summary>
-    Task<MonthlySummaryDto?> UpsertMonthlySummaryAsync(Guid participantId, string monthKey, UpsertMonthlySummaryDto dto);
+    Task<MonthlySummaryDto?> UpsertMonthlySummaryAsync(Guid currentUserId, Guid participantId, string monthKey, UpsertMonthlySummaryDto dto);
 }

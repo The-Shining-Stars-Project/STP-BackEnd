@@ -15,16 +15,9 @@ public class AttendanceController : ControllerBase
 
     public AttendanceController(IAttendanceService service) => _service = service;
 
-    /// <summary>Today's attendance roster across all programs (created lazily if needed).</summary>
-    /// <remarks>Deprecated — use <c>GET scheduled</c> + <c>GET session</c>. Retained until the frontend migrates.</remarks>
-    [HttpGet("today")]
-    [Obsolete("Superseded by GetScheduled + GetSessionByProgram.")]
-    public async Task<ActionResult<IReadOnlyList<AttendanceRosterEntryDto>>> GetToday()
-    {
-#pragma warning disable CS0618
-        return Ok(await _service.GetTodayRosterAsync());
-#pragma warning restore CS0618
-    }
+    // GET today was removed (#2): it returned every program's participants to any signed-in
+    // user, and — being a GET that lazily created sessions and records — let a prefetch open
+    // sessions for programs that never met. Use GET scheduled + GET/POST session instead.
 
     /// <summary>
     /// The session cards for a date (defaults to today), scoped to the caller's programs.

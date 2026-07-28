@@ -6,9 +6,18 @@
     }
   },
   "AllowedHosts": "*",
-  "ConnectionStrings": {
-    "DefaultConnection": "Server=tcp:<server>.database.windows.net,1433;Initial Catalog=<database>;User ID=<user>;Password=<password>;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
-  },
+
+  "_comment_ConnectionStrings": [
+    "Do NOT put a connection string here (#3) — this file is a template and its sibling",
+    "appsettings.json is gitignored precisely because credentials leak that way.",
+    "",
+    "Local development — store it in .NET User Secrets, outside the repo tree:",
+    "  dotnet user-secrets set \"ConnectionStrings:DefaultConnection\" \"Server=tcp:<server>.database.windows.net,1433;Initial Catalog=<db>;User ID=<user>;Password=<pass>;Encrypt=True;\" --project CRM.API",
+    "",
+    "Azure — set the App Service connection string (or the application setting",
+    "ConnectionStrings__DefaultConnection). Better still, use a Managed Identity so there",
+    "is no password to rotate at all."
+  ],
   "Cors": {
     "AllowedOrigins": [
       "http://localhost:3000",

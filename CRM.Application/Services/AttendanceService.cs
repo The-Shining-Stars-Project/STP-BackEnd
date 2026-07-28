@@ -9,15 +9,20 @@ namespace CRM.Application.Services;
 public class AttendanceService : IAttendanceService
 {
     private readonly IUnitOfWork _uow;
+    private readonly IProgramAccessService _access;
 
-    public AttendanceService(IUnitOfWork uow) => _uow = uow;
+    public AttendanceService(IUnitOfWork uow, IProgramAccessService access)
+    {
+        _uow = uow;
+        _access = access;
+    }
 
     public async Task<AttendanceSessionDto?> GetSessionAsync(Guid userId, Guid sessionId)
     {
         var session = await _uow.Sessions.GetByIdAsync(sessionId);
         if (session is null) return null;
 
-        await EnsureAssignedToProgramAsync(userId, session.ProgramId);
+        (await _access.ForUserAsync(userId)).Require(session.ProgramId);
 
         var records = await _uow.Attendance.ListAsync(r => r.SessionId == sessionId);
 
@@ -54,14 +59,16 @@ public class AttendanceService : IAttendanceService
         var record = await _uow.Attendance.GetByIdAsync(recordId);
         if (record is null) return false;
 
+        // Only teachers assigned to the record's program (or an Admin) may edit it. A record
+        // whose session can't be resolved is treated as not-found rather than skipping the
+        // check — deny when the resource can't be located, never fall through.
         var session = await _uow.Sessions.GetByIdAsync(record.SessionId);
+        if (session is null) return false;
 
-        // Only teachers assigned to the record's program (or an Admin) may edit it.
-        if (session is not null)
-            await EnsureAssignedToProgramAsync(userId, session.ProgramId);
+        (await _access.ForUserAsync(userId)).Require(session.ProgramId);
 
         // A submitted session is finalized — its records are locked.
-        if (session is not null && session.Status == SessionStatus.Submitted)
+        if (session.Status == SessionStatus.Submitted)
             throw new InvalidOperationException("This session has been submitted and can no longer be edited.");
 
         record.Status = dto.Status;
@@ -76,10 +83,10 @@ public class AttendanceService : IAttendanceService
         var nextDay = day.AddDays(1);
         var todayFlag = ToFlag(day.DayOfWeek);
 
-        var (isAdmin, staffMemberId) = await ResolveUserAsync(userId);
-        var programs = await _uow.Programs.GetAllAsync();
-        var allowed = await AllowedProgramIdsAsync(isAdmin, staffMemberId, programs);
-        if (allowed.Count == 0) return new List<ScheduledSessionDto>();
+        var access = await _access.ForUserAsync(userId);
+        var programs = (await _uow.Programs.GetAllAsync()).Where(p => access.CanAccess(p.Id)).ToList();
+        if (programs.Count == 0) return new List<ScheduledSessionDto>();
+        var allowed = programs.Select(p => p.Id).ToHashSet();
 
         var activeByProgram = (await _uow.Participants.ListAsync(p => p.Status == ParticipantStatus.Active))
             .Where(p => allowed.Contains(p.ProgramId))
@@ -140,10 +147,7 @@ public class AttendanceService : IAttendanceService
         var program = await _uow.Programs.GetByIdAsync(programId);
         if (program is null) return null;
 
-        var (isAdmin, staffMemberId) = await ResolveUserAsync(userId);
-        var allowed = await AllowedProgramIdsAsync(isAdmin, staffMemberId, new[] { program });
-        if (!allowed.Contains(programId))
-            throw new UnauthorizedAccessException("You are not assigned to this program.");
+        (await _access.ForUserAsync(userId)).Require(programId);
 
         var session = (await _uow.Sessions.ListAsync(s => s.ProgramId == programId && s.Date >= day && s.Date < nextDay))
             .FirstOrDefault();
@@ -195,10 +199,7 @@ public class AttendanceService : IAttendanceService
         var program = await _uow.Programs.GetByIdAsync(programId);
         if (program is null) return null;
 
-        var (isAdmin, staffMemberId) = await ResolveUserAsync(userId);
-        var allowed = await AllowedProgramIdsAsync(isAdmin, staffMemberId, new[] { program });
-        if (!allowed.Contains(programId))
-            throw new UnauthorizedAccessException("You are not assigned to this program.");
+        (await _access.ForUserAsync(userId)).Require(programId);
 
         // Read-only (#23): a GET must never create sessions or records — prefetches and
         // crawlers were able to open sessions for programs that never met.
@@ -274,10 +275,7 @@ public class AttendanceService : IAttendanceService
         var session = await _uow.Sessions.GetByIdAsync(sessionId);
         if (session is null) return false;
 
-        var (isAdmin, staffMemberId) = await ResolveUserAsync(userId);
-        var allowed = await AllowedProgramIdsAsync(isAdmin, staffMemberId, await _uow.Programs.GetAllAsync());
-        if (!allowed.Contains(session.ProgramId))
-            throw new UnauthorizedAccessException("You are not assigned to this program.");
+        (await _access.ForUserAsync(userId)).Require(session.ProgramId);
 
         session.Status = SessionStatus.Submitted;
         session.SubmittedAt = DateTime.UtcNow;
@@ -286,99 +284,19 @@ public class AttendanceService : IAttendanceService
         return true;
     }
 
-    public async Task<IReadOnlyList<AttendanceRosterEntryDto>> GetTodayRosterAsync()
+    public async Task<IReadOnlyList<AttendanceRosterEntryDto>> GetTodayRosterReadOnlyAsync(
+        Guid userId, CancellationToken ct = default)
     {
         var today = DateTime.UtcNow.Date;
         var tomorrow = today.AddDays(1);
 
-        var programs = await _uow.Programs.GetAllAsync();
-        var participants = await _uow.Participants.ListAsync(p => p.Status == ParticipantStatus.Active);
-
-        // One session per program per day — create any that are missing.
-        var sessions = (await _uow.Sessions.ListAsync(s => s.Date >= today && s.Date < tomorrow)).ToList();
-        var sessionByProgram = sessions
-            .GroupBy(s => s.ProgramId)
-            .ToDictionary(g => g.Key, g => g.First());
-
-        var createdSession = false;
-        foreach (var programId in participants.Select(p => p.ProgramId).Distinct())
-        {
-            if (sessionByProgram.ContainsKey(programId)) continue;
-            var session = new Session { ProgramId = programId, Date = today };
-            await _uow.Sessions.AddAsync(session);
-            sessionByProgram[programId] = session;
-            createdSession = true;
-        }
-        if (createdSession) await _uow.SaveChangesAsync();
-
-        // One record per active participant for today's session — create missing ones (Unmarked).
-        var sessionIds = sessionByProgram.Values.Select(s => s.Id).ToHashSet();
-        var records = (await _uow.Attendance.ListAsync(r => sessionIds.Contains(r.SessionId))).ToList();
-        var recordByParticipant = records
-            .GroupBy(r => r.ParticipantId)
-            .ToDictionary(g => g.Key, g => g.First());
-
-        var createdRecord = false;
-        foreach (var p in participants)
-        {
-            if (recordByParticipant.ContainsKey(p.Id)) continue;
-            if (!sessionByProgram.TryGetValue(p.ProgramId, out var session)) continue;
-            var record = new AttendanceRecord
-            {
-                ParticipantId = p.Id,
-                SessionId = session.Id,
-                Status = AttendanceStatus.Unmarked,
-            };
-            await _uow.Attendance.AddAsync(record);
-            recordByParticipant[p.Id] = record;
-            createdRecord = true;
-        }
-        if (createdRecord) await _uow.SaveChangesAsync();
-
-        // Notes for today's records.
-        var recordIds = recordByParticipant.Values.Select(r => r.Id).ToHashSet();
-        var notes = recordIds.Count == 0
-            ? new List<AttendanceNote>()
-            : (await _uow.AttendanceNotes.ListAsync(n => recordIds.Contains(n.AttendanceRecordId))).ToList();
-        var notesByRecord = notes
-            .GroupBy(n => n.AttendanceRecordId)
-            .ToDictionary(g => g.Key, g => g.ToList());
-
-        var programMap = programs.ToDictionary(p => p.Id);
-
-        return participants
-            .Where(p => recordByParticipant.ContainsKey(p.Id))
-            .Select(p =>
-            {
-                var record = recordByParticipant[p.Id];
-                var program = programMap.GetValueOrDefault(p.ProgramId);
-                return new AttendanceRosterEntryDto
-                {
-                    RecordId = record.Id,
-                    ParticipantId = p.Id,
-                    FullName = p.FullName,
-                    Initials = p.Initials,
-                    ProgramId = p.ProgramId,
-                    ProgramSlug = program?.Slug ?? string.Empty,
-                    ProgramName = program?.Name ?? string.Empty,
-                    Status = record.Status,
-                    Notes = notesByRecord.GetValueOrDefault(record.Id, new())
-                        .Select(n => new AttendanceNoteDto { Id = n.Id, Content = n.Content, NoteType = n.NoteType })
-                        .ToList(),
-                };
-            })
-            .OrderBy(e => e.ProgramName)
-            .ThenBy(e => e.FullName)
-            .ToList();
-    }
-
-    public async Task<IReadOnlyList<AttendanceRosterEntryDto>> GetTodayRosterReadOnlyAsync(CancellationToken ct = default)
-    {
-        var today = DateTime.UtcNow.Date;
-        var tomorrow = today.AddDays(1);
-
-        var todaySessions = await _uow.Sessions.ListAsync(s => s.Date >= today && s.Date < tomorrow, ct);
-        var sessionIds = todaySessions.Select(s => s.Id).ToHashSet();
+        // Scoped to the caller's programs (#1). Filtering the sessions is enough — every
+        // record hangs off one, so out-of-scope records never enter the result.
+        var access = await _access.ForUserAsync(userId);
+        var sessionIds = (await _uow.Sessions.ListAsync(s => s.Date >= today && s.Date < tomorrow, ct))
+            .Where(s => access.CanAccess(s.ProgramId))
+            .Select(s => s.Id)
+            .ToHashSet();
         if (sessionIds.Count == 0) return new List<AttendanceRosterEntryDto>();
 
         var records = await _uow.Attendance.ListAsync(r => sessionIds.Contains(r.SessionId));
@@ -418,9 +336,11 @@ public class AttendanceService : IAttendanceService
         var record = await _uow.Attendance.GetByIdAsync(recordId);
         if (record is null) return null;
 
+        // As in UpdateRecordAsync: an unresolvable session is a 404, not a skipped check.
         var session = await _uow.Sessions.GetByIdAsync(record.SessionId);
-        if (session is not null)
-            await EnsureAssignedToProgramAsync(userId, session.ProgramId);
+        if (session is null) return null;
+
+        (await _access.ForUserAsync(userId)).Require(session.ProgramId);
 
         var note = new AttendanceNote
         {
@@ -435,48 +355,9 @@ public class AttendanceService : IAttendanceService
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Throws <see cref="UnauthorizedAccessException"/> unless the user is an Admin or a staff
-    /// member assigned to <paramref name="programId"/>. Prevents one teacher from reading or
-    /// editing another program's attendance by record/session GUID (IDOR, #5).
-    /// </summary>
-    private async Task EnsureAssignedToProgramAsync(Guid userId, Guid programId)
-    {
-        var (isAdmin, staffMemberId) = await ResolveUserAsync(userId);
-        if (isAdmin) return;
-
-        var assignments = await _uow.GetStaffProgramAssignmentsAsync();
-        var assigned = staffMemberId is { } sid
-            && assignments.Any(a => a.StaffMemberId == sid && a.ProgramId == programId);
-        if (!assigned)
-            throw new UnauthorizedAccessException("You are not assigned to this program.");
-    }
-
-    /// <summary>Resolves the calling user to (isAdmin, linked staff id) for program scoping.</summary>
-    private async Task<(bool IsAdmin, Guid? StaffMemberId)> ResolveUserAsync(Guid userId)
-    {
-        var user = await _uow.Users.GetByIdAsync(userId);
-        if (user is null) return (false, null);
-        return (user.Role == UserRole.Admin, user.StaffMemberId);
-    }
-
-    /// <summary>
-    /// The set of program ids the user may take attendance for: every program for an Admin,
-    /// otherwise the programs their linked staff record is assigned to.
-    /// </summary>
-    private async Task<HashSet<Guid>> AllowedProgramIdsAsync(
-        bool isAdmin, Guid? staffMemberId, IReadOnlyList<CrmProgram> programs)
-    {
-        if (isAdmin) return programs.Select(p => p.Id).ToHashSet();
-        if (staffMemberId is null) return new HashSet<Guid>();
-
-        var assignments = await _uow.GetStaffProgramAssignmentsAsync();
-        return assignments
-            .Where(a => a.StaffMemberId == staffMemberId.Value)
-            .Select(a => a.ProgramId)
-            .ToHashSet();
-    }
+    //
+    // Program scoping now lives in IProgramAccessService so participants, progress,
+    // roster and planning enforce the same rule this service used to enforce alone (#1).
 
     private static MeetingDays ToFlag(DayOfWeek d) => d switch
     {

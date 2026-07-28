@@ -9,19 +9,28 @@ public class ParticipantService : IParticipantService
 {
     private readonly IUnitOfWork _uow;
     private readonly IStatsQueries _stats;
+    private readonly IProgramAccessService _access;
 
-    public ParticipantService(IUnitOfWork uow, IStatsQueries stats)
+    public ParticipantService(IUnitOfWork uow, IStatsQueries stats, IProgramAccessService access)
     {
         _uow = uow;
         _stats = stats;
+        _access = access;
     }
 
-    public async Task<IReadOnlyList<ParticipantSummaryDto>> GetAllAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<ParticipantSummaryDto>> GetAllAsync(Guid userId, CancellationToken ct = default)
     {
-        var participants = await _uow.Participants.GetAllAsync(ct);
+        // Scoped to the caller's programs (#1) — a teacher listing participants must not
+        // see (or be able to enumerate the ids of) children in programs they don't teach.
+        var access = await _access.ForUserAsync(userId);
+
+        var participants = (await _uow.Participants.GetAllAsync(ct))
+            .Where(p => access.CanAccess(p.ProgramId))
+            .ToList();
+        if (participants.Count == 0) return new List<ParticipantSummaryDto>();
+
         var programs = await _uow.Programs.GetAllAsync(ct);
         var programMap = programs.ToDictionary(p => p.Id, p => p.Name);
-
         var slugMap = programs.ToDictionary(p => p.Id, p => p.Slug);
 
         // Attendance % from SQL-side aggregates (#8/#11) — no whole-ledger load.
@@ -29,14 +38,12 @@ public class ParticipantService : IParticipantService
         return participants.Select(p => ToSummary(p, programMap, slugMap, pctMap)).ToList();
     }
 
-    public async Task<ParticipantDetailDto?> GetByIdAsync(Guid id)
+    public async Task<ParticipantDetailDto?> GetByIdAsync(Guid userId, Guid id)
     {
-        var p = await _uow.Participants.GetByIdAsync(id);
+        var p = await _access.RequireParticipantAsync(userId, id);
         if (p is null) return null;
 
-        var programs = await _uow.Programs.GetAllAsync();
-        var prog = programs.FirstOrDefault(pr => pr.Id == p.ProgramId);
-
+        var prog = await _uow.Programs.GetByIdAsync(p.ProgramId);
         var records = await _uow.Attendance.ListAsync(r => r.ParticipantId == id);
 
         return new ParticipantDetailDto
@@ -58,8 +65,12 @@ public class ParticipantService : IParticipantService
         };
     }
 
-    public async Task<ParticipantDetailDto> CreateAsync(CreateParticipantDto dto)
+    public async Task<ParticipantDetailDto> CreateAsync(Guid userId, CreateParticipantDto dto)
     {
+        // You may only enrol a child into a program you run.
+        var access = await _access.ForUserAsync(userId);
+        access.Require(dto.ProgramId);
+
         var participant = new Participant
         {
             FullName = dto.FullName,
@@ -74,13 +85,21 @@ public class ParticipantService : IParticipantService
         await _uow.Participants.AddAsync(participant);
         await _uow.SaveChangesAsync();
 
-        return (await GetByIdAsync(participant.Id))!;
+        return (await GetByIdAsync(userId, participant.Id))!;
     }
 
-    public async Task<ParticipantDetailDto?> UpdateAsync(Guid id, UpdateParticipantDto dto)
+    public async Task<ParticipantDetailDto?> UpdateAsync(Guid userId, Guid id, UpdateParticipantDto dto)
     {
-        var participant = await _uow.Participants.GetByIdAsync(id);
+        var participant = await _access.RequireParticipantAsync(userId, id);
         if (participant is null) return null;
+
+        // Moving a child between programs needs scope over the destination too, otherwise
+        // it becomes a way to push records into a program you can't otherwise write to.
+        if (dto.ProgramId.HasValue && dto.ProgramId.Value != participant.ProgramId)
+        {
+            var access = await _access.ForUserAsync(userId);
+            access.Require(dto.ProgramId.Value);
+        }
 
         if (dto.FullName is not null) participant.FullName = dto.FullName;
         if (dto.Initials is not null) participant.Initials = dto.Initials;
@@ -92,12 +111,12 @@ public class ParticipantService : IParticipantService
         await _uow.Participants.UpdateAsync(participant);
         await _uow.SaveChangesAsync();
 
-        return await GetByIdAsync(id);
+        return await GetByIdAsync(userId, id);
     }
 
-    public async Task<bool> DeleteAsync(Guid id)
+    public async Task<bool> DeleteAsync(Guid userId, Guid id)
     {
-        var participant = await _uow.Participants.GetByIdAsync(id);
+        var participant = await _access.RequireParticipantAsync(userId, id);
         if (participant is null) return false;
 
         await _uow.Participants.DeleteAsync(participant);

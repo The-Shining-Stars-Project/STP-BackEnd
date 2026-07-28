@@ -15,14 +15,17 @@ public class RosterController : ControllerBase
 
     public RosterController(IRosterService service) => _service = service;
 
-    /// <summary>The full roster for a term (management view). Optionally filtered to one site.</summary>
+    /// <summary>
+    /// The roster for a term (management view), scoped to the caller's programs.
+    /// Optionally filtered to one site.
+    /// </summary>
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<RosterEntryDto>>> GetRoster(
         [FromQuery] int year, [FromQuery] int quarter, [FromQuery] Guid? siteId)
     {
         if (year < 2020 || quarter < 1 || quarter > 4)
             return BadRequest("Provide a valid year and a quarter of 1–4.");
-        return Ok(await _service.GetRosterAsync(year, quarter, siteId));
+        return Ok(await _service.GetRosterAsync(User.GetUserId(), year, quarter, siteId));
     }
 
     /// <summary>The caller's in-scope Stars for a term.</summary>
@@ -42,6 +45,7 @@ public class RosterController : ControllerBase
     {
         if (dto.Year < 2020 || dto.Quarter < 1 || dto.Quarter > 4)
             return BadRequest("Provide a valid year and a quarter of 1–4.");
-        return Ok(await _service.UpsertAssignmentAsync(dto));
+        var result = await _service.UpsertAssignmentAsync(User.GetUserId(), dto);
+        return result is null ? NotFound() : Ok(result);
     }
 }

@@ -2,22 +2,30 @@ using CRM.Application.DTOs.Roster;
 using CRM.Application.Interfaces;
 using CRM.Application.Interfaces.Services;
 using CRM.Domain.Entities;
-using CRM.Domain.Enums;
 
 namespace CRM.Application.Services;
 
 public class RosterService : IRosterService
 {
     private readonly IUnitOfWork _uow;
+    private readonly IProgramAccessService _access;
 
-    public RosterService(IUnitOfWork uow) => _uow = uow;
-
-    public async Task<IReadOnlyList<RosterEntryDto>> GetRosterAsync(int year, int quarter, Guid? siteId)
+    public RosterService(IUnitOfWork uow, IProgramAccessService access)
     {
+        _uow = uow;
+        _access = access;
+    }
+
+    public async Task<IReadOnlyList<RosterEntryDto>> GetRosterAsync(Guid userId, int year, int quarter, Guid? siteId)
+    {
+        // The management view is still program-scoped (#1) — "management" describes the
+        // columns shown, not a licence to read every program's children.
+        var access = await _access.ForUserAsync(userId);
         var participants = await _uow.Participants.GetAllAsync();
         var ctx = await LoadContextAsync(year, quarter);
 
         var entries = participants
+            .Where(p => access.CanAccess(p.ProgramId))
             .Select(p => BuildEntry(p, ctx.AssignmentByParticipant.GetValueOrDefault(p.Id), year, quarter, ctx))
             .Where(e => siteId is null || e.SiteId == siteId);
 
@@ -26,19 +34,22 @@ public class RosterService : IRosterService
 
     public async Task<IReadOnlyList<RosterEntryDto>> GetMyStarsAsync(Guid userId, int year, int quarter)
     {
+        var access = await _access.ForUserAsync(userId);
         var participants = await _uow.Participants.GetAllAsync();
         var ctx = await LoadContextAsync(year, quarter);
-        var allowed = await AllowedProgramIdsAsync(userId, ctx.Programs.Keys);
 
         var entries = participants
-            .Where(p => allowed.Contains(p.ProgramId))
+            .Where(p => access.CanAccess(p.ProgramId))
             .Select(p => BuildEntry(p, ctx.AssignmentByParticipant.GetValueOrDefault(p.Id), year, quarter, ctx));
 
         return Order(entries).ToList();
     }
 
-    public async Task<RosterEntryDto> UpsertAssignmentAsync(UpsertRosterAssignmentDto dto)
+    public async Task<RosterEntryDto?> UpsertAssignmentAsync(Guid userId, UpsertRosterAssignmentDto dto)
     {
+        var participant = await _access.RequireParticipantAsync(userId, dto.ParticipantId);
+        if (participant is null) return null;
+
         var existing = (await _uow.RosterAssignments.ListAsync(
             r => r.ParticipantId == dto.ParticipantId && r.Year == dto.Year && r.Quarter == dto.Quarter)).FirstOrDefault();
 
@@ -70,8 +81,6 @@ public class RosterService : IRosterService
         await _uow.SaveChangesAsync();
 
         var ctx = await LoadContextAsync(dto.Year, dto.Quarter);
-        var participant = await _uow.Participants.GetByIdAsync(dto.ParticipantId)
-                          ?? throw new ArgumentException($"Participant {dto.ParticipantId} not found.");
         return BuildEntry(participant, existing, dto.Year, dto.Quarter, ctx);
     }
 
@@ -133,17 +142,4 @@ public class RosterService : IRosterService
         entries.OrderBy(e => e.SiteName ?? "~")   // unassigned (null) sorts last
                .ThenBy(e => e.StarGroupName ?? "~")
                .ThenBy(e => e.ParticipantName);
-
-    private async Task<HashSet<Guid>> AllowedProgramIdsAsync(Guid userId, IEnumerable<Guid> allProgramIds)
-    {
-        var user = await _uow.Users.GetByIdAsync(userId);
-        if (user?.Role == UserRole.Admin) return allProgramIds.ToHashSet();
-        if (user?.StaffMemberId is not { } staffId) return new HashSet<Guid>();
-
-        var assignments = await _uow.GetStaffProgramAssignmentsAsync();
-        return assignments
-            .Where(a => a.StaffMemberId == staffId)
-            .Select(a => a.ProgramId)
-            .ToHashSet();
-    }
 }

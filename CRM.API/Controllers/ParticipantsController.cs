@@ -20,15 +20,15 @@ public class ParticipantsController : ControllerBase
     }
 
     /// <summary>
-    /// Lists participants. Optional paging (#25): pass <c>?page=1&amp;pageSize=50</c>
-    /// (pageSize capped at 200) to get one page plus an <c>X-Total-Count</c> header;
-    /// omit both to get the full list (existing behavior).
+    /// Lists participants in the caller's programs (#1). Optional paging (#25): pass
+    /// <c>?page=1&amp;pageSize=50</c> (pageSize capped at 200) to get one page plus an
+    /// <c>X-Total-Count</c> header; omit both to get the full in-scope list.
     /// </summary>
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<ParticipantSummaryDto>>> GetAll(
         [FromQuery] int? page, [FromQuery] int? pageSize, CancellationToken ct)
     {
-        var all = await _service.GetAllAsync(ct);
+        var all = await _service.GetAllAsync(User.GetUserId(), ct);
         if (page is null && pageSize is null) return Ok(all);
 
         var size = Math.Clamp(pageSize ?? 50, 1, 200);
@@ -41,7 +41,7 @@ public class ParticipantsController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<ParticipantDetailDto>> GetById(Guid id)
     {
-        var result = await _service.GetByIdAsync(id);
+        var result = await _service.GetByIdAsync(User.GetUserId(), id);
         return result is null ? NotFound() : Ok(result);
     }
 
@@ -49,7 +49,7 @@ public class ParticipantsController : ControllerBase
     [Authorize(Policy = "ManagementWrite")]
     public async Task<ActionResult<ParticipantDetailDto>> Create([FromBody] CreateParticipantDto dto)
     {
-        var result = await _service.CreateAsync(dto);
+        var result = await _service.CreateAsync(User.GetUserId(), dto);
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
 
@@ -57,7 +57,7 @@ public class ParticipantsController : ControllerBase
     [Authorize(Policy = "ManagementWrite")]
     public async Task<ActionResult<ParticipantDetailDto>> Update(Guid id, [FromBody] UpdateParticipantDto dto)
     {
-        var result = await _service.UpdateAsync(id, dto);
+        var result = await _service.UpdateAsync(User.GetUserId(), id, dto);
         return result is null ? NotFound() : Ok(result);
     }
 
@@ -66,7 +66,7 @@ public class ParticipantsController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(Guid id)
     {
-        var deleted = await _service.DeleteAsync(id);
+        var deleted = await _service.DeleteAsync(User.GetUserId(), id);
         return deleted ? NoContent() : NotFound();
     }
 
@@ -74,7 +74,7 @@ public class ParticipantsController : ControllerBase
     [HttpGet("{id:guid}/arts-profile")]
     public async Task<ActionResult<ParticipantArtsProfileDto>> GetArtsProfile(Guid id)
     {
-        var profile = await _artsProfile.GetAsync(id);
+        var profile = await _artsProfile.GetAsync(User.GetUserId(), id);
         return profile is null ? NotFound() : Ok(profile);
     }
 
@@ -83,7 +83,7 @@ public class ParticipantsController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<ParticipantArtsProfileDto>> UpsertArtsProfile(Guid id, [FromBody] UpsertArtsProfileDto dto)
     {
-        var profile = await _artsProfile.UpsertAsync(id, dto);
+        var profile = await _artsProfile.UpsertAsync(User.GetUserId(), id, dto);
         return profile is null ? NotFound() : Ok(profile);
     }
 }

@@ -19,7 +19,7 @@ public class PlanningController : ControllerBase
         [FromQuery] string month, [FromQuery] Guid? programId)
     {
         if (string.IsNullOrWhiteSpace(month)) return BadRequest("month is required (yyyy-MM).");
-        return Ok(await _service.GetPerStarPlansAsync(month, programId));
+        return Ok(await _service.GetPerStarPlansAsync(User.GetUserId(), month, programId));
     }
 
     [HttpPut("per-star")]
@@ -27,6 +27,7 @@ public class PlanningController : ControllerBase
     {
         if (dto.ParticipantId == Guid.Empty || string.IsNullOrWhiteSpace(dto.MonthKey))
             return BadRequest("participantId and monthKey are required.");
-        return Ok(await _service.UpsertPerStarPlanAsync(dto));
+        var result = await _service.UpsertPerStarPlanAsync(User.GetUserId(), dto);
+        return result is null ? NotFound() : Ok(result);
     }
 }
