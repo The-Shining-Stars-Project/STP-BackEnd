@@ -17,4 +17,10 @@ public class UpdateChecklistTemplateDto
 public class SetOnboardingItemDto
 {
     public bool IsCompleted { get; set; }
+
+    /// <summary>Due/renewal date for expiring items (CPR, TB, Mandated Reporter…).</summary>
+    public DateTime? ExpiryDate { get; set; }
+
+    /// <summary>True clears the stored expiry (null alone means "unchanged").</summary>
+    public bool ClearExpiry { get; set; }
 }

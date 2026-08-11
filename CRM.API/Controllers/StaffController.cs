@@ -46,7 +46,7 @@ public class StaffController : ControllerBase
     [Authorize(Policy = "ManagementWrite")]
     public async Task<ActionResult<StaffDetailDto>> SetOnboardingItem(Guid id, Guid itemId, [FromBody] SetOnboardingItemDto dto)
     {
-        var result = await _service.SetOnboardingItemAsync(id, itemId, dto.IsCompleted);
+        var result = await _service.SetOnboardingItemAsync(id, itemId, dto);
         return result is null ? NotFound() : Ok(result);
     }
 

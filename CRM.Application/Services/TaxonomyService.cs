@@ -29,6 +29,9 @@ public class TaxonomyService : ITaxonomyService
                 Slug = a.Slug,
                 ColorHex = a.ColorHex,
                 SortOrder = a.SortOrder,
+                Track = a.Track.ToString(),
+                AnnualGoal = a.AnnualGoal,
+                SixMonthBenchmark = a.SixMonthBenchmark,
                 SubSkills = byArea.TryGetValue(a.Id, out var list)
                     ? list.OrderBy(s => s.SortOrder).Select(s => ToDto(s, a)).ToList()
                     : new List<SubSkillDto>(),

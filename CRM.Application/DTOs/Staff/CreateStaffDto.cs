@@ -16,6 +16,9 @@ public class CreateStaffDto
     public StaffRole Role { get; set; } = StaffRole.Teacher;
     public DateTime? StartDate { get; set; }
     public List<Guid> ProgramIds { get; set; } = new();
+
+    [StringLength(20)]
+    public string? TShirtSize { get; set; }
 }
 
 public class UpdateStaffDto
@@ -34,4 +37,7 @@ public class UpdateStaffDto
 
     /// <summary>True clears the end date, restoring the member to active.</summary>
     public bool ClearEndDate { get; set; }
+
+    [StringLength(20)]
+    public string? TShirtSize { get; set; }
 }

@@ -64,6 +64,7 @@ public class StaffService : IStaffService
             StartDate = s.StartDate.ToString("yyyy-MM-dd"),
             EndDate = s.EndDate?.ToString("yyyy-MM-dd"),
             IsFormer = s.EndDate is not null,
+            TShirtSize = s.TShirtSize,
             OnboardingProgressPct = s.OnboardingProgressPct,
             ProgramNames = progNames,
             OnboardingItems = onboardingItems.Select(o => new OnboardingItemDto
@@ -86,6 +87,7 @@ public class StaffService : IStaffService
             Initials = dto.Initials,
             Role = dto.Role,
             StartDate = dto.StartDate ?? _clock.Today,
+            TShirtSize = dto.TShirtSize,
         };
 
         await _uow.Staff.AddAsync(member);
@@ -128,6 +130,7 @@ public class StaffService : IStaffService
         if (dto.Role.HasValue) member.Role = dto.Role.Value;
         if (dto.EndDate.HasValue) member.EndDate = dto.EndDate;
         else if (dto.ClearEndDate) member.EndDate = null;
+        if (dto.TShirtSize is not null) member.TShirtSize = dto.TShirtSize;
 
         await _uow.Staff.UpdateAsync(member);
         await _uow.SaveChangesAsync();
@@ -135,7 +138,7 @@ public class StaffService : IStaffService
         return await GetByIdAsync(id);
     }
 
-    public async Task<StaffDetailDto?> SetOnboardingItemAsync(Guid staffId, Guid itemId, bool isCompleted)
+    public async Task<StaffDetailDto?> SetOnboardingItemAsync(Guid staffId, Guid itemId, SetOnboardingItemDto dto)
     {
         var member = await _uow.Staff.GetByIdAsync(staffId);
         if (member is null) return null;
@@ -143,8 +146,10 @@ public class StaffService : IStaffService
         var item = await _uow.OnboardingItems.FirstOrDefaultAsync(o => o.Id == itemId && o.StaffMemberId == staffId);
         if (item is null) return null;
 
-        item.IsCompleted = isCompleted;
-        item.CompletedDate = isCompleted ? _clock.Today : null;
+        item.IsCompleted = dto.IsCompleted;
+        item.CompletedDate = dto.IsCompleted ? (item.CompletedDate ?? _clock.Today) : null;
+        if (dto.ExpiryDate.HasValue) item.ExpiryDate = dto.ExpiryDate;
+        else if (dto.ClearExpiry) item.ExpiryDate = null;
         await _uow.OnboardingItems.UpdateAsync(item);
         // Flush before recounting: ListAsync reads AsNoTracking, so an unsaved
         // toggle would come back with its old IsCompleted value.
@@ -200,6 +205,7 @@ public class StaffService : IStaffService
             StartDate = s.StartDate.ToString("yyyy-MM-dd"),
             EndDate = s.EndDate?.ToString("yyyy-MM-dd"),
             IsFormer = s.EndDate is not null,
+            TShirtSize = s.TShirtSize,
             OnboardingProgressPct = s.OnboardingProgressPct,
             ProgramNames = programNames,
         };

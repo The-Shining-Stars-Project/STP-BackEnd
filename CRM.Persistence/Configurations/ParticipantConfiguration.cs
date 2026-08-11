@@ -18,6 +18,16 @@ public class ParticipantConfiguration : IEntityTypeConfiguration<Participant>
         builder.Property(p => p.ReferralSource).HasMaxLength(200);
         builder.Property(p => p.TShirtSize).HasMaxLength(20);
         builder.Property(p => p.IntakeNotes).HasMaxLength(2000);
+        builder.Property(p => p.Allergies).HasMaxLength(500);
+        builder.Property(p => p.AreasOfConcern).HasMaxLength(1000);
+        builder.Property(p => p.ServiceCoordinatorEmail).HasMaxLength(200);
+        builder.Property(p => p.ServiceCoordinatorPhone).HasMaxLength(50);
+        builder.Property(p => p.ContactInRemind).HasMaxLength(300);
+
+        builder.HasOne(p => p.SecondaryProgram)
+               .WithMany()
+               .HasForeignKey(p => p.SecondaryProgramId)
+               .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(p => p.Program)
                .WithMany(pr => pr.Participants)

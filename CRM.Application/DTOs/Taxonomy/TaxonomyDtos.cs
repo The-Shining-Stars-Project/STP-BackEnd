@@ -7,6 +7,10 @@ public class ObjectiveAreaDto
     public string Slug { get; set; } = string.Empty;
     public string ColorHex { get; set; } = string.Empty;
     public int SortOrder { get; set; }
+    /// <summary>"PartTime" or "Pathways" — which progress framework the area belongs to.</summary>
+    public string Track { get; set; } = "PartTime";
+    public string? AnnualGoal { get; set; }
+    public string? SixMonthBenchmark { get; set; }
     public List<SubSkillDto> SubSkills { get; set; } = new();
 }
 

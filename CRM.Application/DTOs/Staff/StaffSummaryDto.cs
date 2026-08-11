@@ -12,6 +12,7 @@ public class StaffSummaryDto
     /// <summary>yyyy-MM-dd; non-null marks the member as former.</summary>
     public string? EndDate { get; set; }
     public bool IsFormer { get; set; }
+    public string? TShirtSize { get; set; }
     public int OnboardingProgressPct { get; set; }
     public List<string> ProgramNames { get; set; } = new();
 }

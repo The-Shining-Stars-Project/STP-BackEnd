@@ -26,4 +26,23 @@ public class ParticipantSummaryDto
     public string? IntakeNotes { get; set; }
     /// <summary>yyyy-MM-dd, null when not set.</summary>
     public string? AuthorizationExpiry { get; set; }
+
+    /// <summary>yyyy-MM-dd, null when not set.</summary>
+    public string? IppExpiry { get; set; }
+
+    /// <summary>yyyy-MM-dd, null when not set.</summary>
+    public string? DateOfBirth { get; set; }
+
+    public string? Allergies { get; set; }
+    public bool AllergyAnaphylactic { get; set; }
+    public string? AreasOfConcern { get; set; }
+    public string? ServiceCoordinatorEmail { get; set; }
+    public string? ServiceCoordinatorPhone { get; set; }
+    public string? ContactInRemind { get; set; }
+    public bool IntakeDocsSubmitted { get; set; }
+    public bool? HasHighSchoolDiploma { get; set; }
+
+    public Guid? SecondaryProgramId { get; set; }
+    public string? SecondaryProgramName { get; set; }
+    public string? SecondaryProgramSlug { get; set; }
 }

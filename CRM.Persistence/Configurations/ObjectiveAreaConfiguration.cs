@@ -13,6 +13,8 @@ public class ObjectiveAreaConfiguration : IEntityTypeConfiguration<ObjectiveArea
         builder.Property(a => a.Slug).IsRequired().HasMaxLength(100);
         builder.Property(a => a.ColorHex).IsRequired().HasMaxLength(7);
         builder.HasIndex(a => a.Slug).IsUnique();
+        builder.Property(a => a.AnnualGoal).HasMaxLength(1000);
+        builder.Property(a => a.SixMonthBenchmark).HasMaxLength(1000);
 
         builder.HasMany(a => a.SubSkills)
                .WithOne(s => s.ObjectiveArea)

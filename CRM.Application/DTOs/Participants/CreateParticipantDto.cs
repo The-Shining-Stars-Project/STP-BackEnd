@@ -45,6 +45,29 @@ public class CreateParticipantDto
     public string? IntakeNotes { get; set; }
 
     public DateTime? AuthorizationExpiry { get; set; }
+    public DateTime? IppExpiry { get; set; }
+    public DateTime? DateOfBirth { get; set; }
+
+    [StringLength(500)]
+    public string? Allergies { get; set; }
+    public bool AllergyAnaphylactic { get; set; }
+
+    [StringLength(1000)]
+    public string? AreasOfConcern { get; set; }
+
+    [StringLength(200)]
+    public string? ServiceCoordinatorEmail { get; set; }
+
+    [StringLength(50)]
+    public string? ServiceCoordinatorPhone { get; set; }
+
+    [StringLength(300)]
+    public string? ContactInRemind { get; set; }
+
+    public bool IntakeDocsSubmitted { get; set; }
+    public bool? HasHighSchoolDiploma { get; set; }
+
+    public Guid? SecondaryProgramId { get; set; }
 }
 
 public class UpdateParticipantDto
@@ -86,4 +109,32 @@ public class UpdateParticipantDto
 
     /// <summary>True clears the stored expiry (a bare null just means "unchanged" on PUT).</summary>
     public bool ClearAuthorizationExpiry { get; set; }
+
+    public DateTime? IppExpiry { get; set; }
+    public bool ClearIppExpiry { get; set; }
+
+    public DateTime? DateOfBirth { get; set; }
+
+    [StringLength(500)]
+    public string? Allergies { get; set; }
+    public bool? AllergyAnaphylactic { get; set; }
+
+    [StringLength(1000)]
+    public string? AreasOfConcern { get; set; }
+
+    [StringLength(200)]
+    public string? ServiceCoordinatorEmail { get; set; }
+
+    [StringLength(50)]
+    public string? ServiceCoordinatorPhone { get; set; }
+
+    [StringLength(300)]
+    public string? ContactInRemind { get; set; }
+
+    public bool? IntakeDocsSubmitted { get; set; }
+    public bool? HasHighSchoolDiploma { get; set; }
+
+    public Guid? SecondaryProgramId { get; set; }
+    /// <summary>True removes the secondary enrollment (null alone means "unchanged").</summary>
+    public bool ClearSecondaryProgram { get; set; }
 }

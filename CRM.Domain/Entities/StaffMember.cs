@@ -13,6 +13,8 @@ public class StaffMember : BaseEntity
     /// <summary>Set when the staff member leaves — a non-null end date marks them as former.</summary>
     public DateTime? EndDate { get; set; }
 
+    public string? TShirtSize { get; set; }
+
     public int OnboardingProgressPct { get; set; }
 
     public ICollection<StaffProgramAssignment> ProgramAssignments { get; set; } = new List<StaffProgramAssignment>();

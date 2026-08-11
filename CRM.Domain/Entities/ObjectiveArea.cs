@@ -1,4 +1,5 @@
 using CRM.Domain.Common;
+using CRM.Domain.Enums;
 
 namespace CRM.Domain.Entities;
 
@@ -15,6 +16,13 @@ public class ObjectiveArea : BaseEntity
     public string Slug { get; set; } = string.Empty;
     public string ColorHex { get; set; } = string.Empty;
     public int SortOrder { get; set; }
+
+    /// <summary>Which framework this area belongs to (part-time vs full-time Pathways).</summary>
+    public ProgramTrack Track { get; set; } = ProgramTrack.PartTime;
+
+    /// <summary>Pathways areas carry an annual goal and 6-month benchmark; null for part-time.</summary>
+    public string? AnnualGoal { get; set; }
+    public string? SixMonthBenchmark { get; set; }
 
     public ICollection<SubSkill> SubSkills { get; set; } = new List<SubSkill>();
 }

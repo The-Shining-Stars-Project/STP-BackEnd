@@ -46,6 +46,7 @@ public class ParticipantService : IParticipantService
         if (p is null) return null;
 
         var prog = await _uow.Programs.GetByIdAsync(p.ProgramId);
+        var secondary = p.SecondaryProgramId is { } sid ? await _uow.Programs.GetByIdAsync(sid) : null;
         var records = await _uow.Attendance.ListAsync(r => r.ParticipantId == id);
 
         return new ParticipantDetailDto
@@ -69,6 +70,19 @@ public class ParticipantService : IParticipantService
             TShirtSize = p.TShirtSize,
             IntakeNotes = p.IntakeNotes,
             AuthorizationExpiry = p.AuthorizationExpiry?.ToString("yyyy-MM-dd"),
+            IppExpiry = p.IppExpiry?.ToString("yyyy-MM-dd"),
+            DateOfBirth = p.DateOfBirth?.ToString("yyyy-MM-dd"),
+            Allergies = p.Allergies,
+            AllergyAnaphylactic = p.AllergyAnaphylactic,
+            AreasOfConcern = p.AreasOfConcern,
+            ServiceCoordinatorEmail = p.ServiceCoordinatorEmail,
+            ServiceCoordinatorPhone = p.ServiceCoordinatorPhone,
+            ContactInRemind = p.ContactInRemind,
+            IntakeDocsSubmitted = p.IntakeDocsSubmitted,
+            HasHighSchoolDiploma = p.HasHighSchoolDiploma,
+            SecondaryProgramId = p.SecondaryProgramId,
+            SecondaryProgramName = secondary?.Name,
+            SecondaryProgramSlug = secondary?.Slug,
             Documents = new(),
             RecentAttendance = new(),
         };
@@ -86,7 +100,7 @@ public class ParticipantService : IParticipantService
             Initials = dto.Initials,
             ProgramId = dto.ProgramId,
             Status = dto.Status,
-            BirthYear = dto.BirthYear,
+            BirthYear = dto.BirthYear ?? dto.DateOfBirth?.Year,
             ServiceCoordinator = dto.ServiceCoordinator,
             StartDate = dto.StartDate ?? _clock.Today,
             GuardianName = dto.GuardianName,
@@ -96,7 +110,19 @@ public class ParticipantService : IParticipantService
             TShirtSize = dto.TShirtSize,
             IntakeNotes = dto.IntakeNotes,
             AuthorizationExpiry = dto.AuthorizationExpiry,
+            IppExpiry = dto.IppExpiry,
+            DateOfBirth = dto.DateOfBirth,
+            Allergies = dto.Allergies,
+            AllergyAnaphylactic = dto.AllergyAnaphylactic,
+            AreasOfConcern = dto.AreasOfConcern,
+            ServiceCoordinatorEmail = dto.ServiceCoordinatorEmail,
+            ServiceCoordinatorPhone = dto.ServiceCoordinatorPhone,
+            ContactInRemind = dto.ContactInRemind,
+            IntakeDocsSubmitted = dto.IntakeDocsSubmitted,
+            HasHighSchoolDiploma = dto.HasHighSchoolDiploma,
+            SecondaryProgramId = dto.SecondaryProgramId,
         };
+        if (dto.SecondaryProgramId is { } secId) access.Require(secId);
 
         await _uow.Participants.AddAsync(participant);
         await _uow.SaveChangesAsync();
@@ -131,6 +157,27 @@ public class ParticipantService : IParticipantService
         if (dto.IntakeNotes is not null) participant.IntakeNotes = dto.IntakeNotes;
         if (dto.AuthorizationExpiry.HasValue) participant.AuthorizationExpiry = dto.AuthorizationExpiry;
         else if (dto.ClearAuthorizationExpiry) participant.AuthorizationExpiry = null;
+        if (dto.IppExpiry.HasValue) participant.IppExpiry = dto.IppExpiry;
+        else if (dto.ClearIppExpiry) participant.IppExpiry = null;
+        if (dto.DateOfBirth.HasValue)
+        {
+            participant.DateOfBirth = dto.DateOfBirth;
+            participant.BirthYear ??= dto.DateOfBirth.Value.Year;
+        }
+        if (dto.Allergies is not null) participant.Allergies = dto.Allergies;
+        if (dto.AllergyAnaphylactic.HasValue) participant.AllergyAnaphylactic = dto.AllergyAnaphylactic.Value;
+        if (dto.AreasOfConcern is not null) participant.AreasOfConcern = dto.AreasOfConcern;
+        if (dto.ServiceCoordinatorEmail is not null) participant.ServiceCoordinatorEmail = dto.ServiceCoordinatorEmail;
+        if (dto.ServiceCoordinatorPhone is not null) participant.ServiceCoordinatorPhone = dto.ServiceCoordinatorPhone;
+        if (dto.ContactInRemind is not null) participant.ContactInRemind = dto.ContactInRemind;
+        if (dto.IntakeDocsSubmitted.HasValue) participant.IntakeDocsSubmitted = dto.IntakeDocsSubmitted.Value;
+        if (dto.HasHighSchoolDiploma.HasValue) participant.HasHighSchoolDiploma = dto.HasHighSchoolDiploma;
+        if (dto.SecondaryProgramId is { } newSecId && newSecId != participant.SecondaryProgramId)
+        {
+            (await _access.ForUserAsync(userId)).Require(newSecId);
+            participant.SecondaryProgramId = newSecId;
+        }
+        else if (dto.ClearSecondaryProgram) participant.SecondaryProgramId = null;
 
         await _uow.Participants.UpdateAsync(participant);
         await _uow.SaveChangesAsync();
@@ -174,5 +221,18 @@ public class ParticipantService : IParticipantService
             TShirtSize = p.TShirtSize,
             IntakeNotes = p.IntakeNotes,
             AuthorizationExpiry = p.AuthorizationExpiry?.ToString("yyyy-MM-dd"),
+            IppExpiry = p.IppExpiry?.ToString("yyyy-MM-dd"),
+            DateOfBirth = p.DateOfBirth?.ToString("yyyy-MM-dd"),
+            Allergies = p.Allergies,
+            AllergyAnaphylactic = p.AllergyAnaphylactic,
+            AreasOfConcern = p.AreasOfConcern,
+            ServiceCoordinatorEmail = p.ServiceCoordinatorEmail,
+            ServiceCoordinatorPhone = p.ServiceCoordinatorPhone,
+            ContactInRemind = p.ContactInRemind,
+            IntakeDocsSubmitted = p.IntakeDocsSubmitted,
+            HasHighSchoolDiploma = p.HasHighSchoolDiploma,
+            SecondaryProgramId = p.SecondaryProgramId,
+            SecondaryProgramName = p.SecondaryProgramId is { } sid2 ? programMap.GetValueOrDefault(sid2) : null,
+            SecondaryProgramSlug = p.SecondaryProgramId is { } sid3 ? slugMap?.GetValueOrDefault(sid3) : null,
         };
 }

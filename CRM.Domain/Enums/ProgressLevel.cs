@@ -12,4 +12,7 @@ public enum ProgressLevel
     Intermediate,
     Expert,
     NotApplicable,
+
+    /// <summary>Job-readiness level used by the full-time Pathways framework only.</summary>
+    Vocational,
 }
