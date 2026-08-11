@@ -11,6 +11,9 @@ public class Session : BaseEntity
     public string? TimeRange { get; set; }
     public string? Label { get; set; }
 
+    /// <summary>Total hours the session ran — recorded for Pathways attendance reporting.</summary>
+    public decimal? HoursLogged { get; set; }
+
     /// <summary>Open while attendance is being taken; Submitted once finalized (records locked).</summary>
     public SessionStatus Status { get; set; } = SessionStatus.Open;
     public DateTime? SubmittedAt { get; set; }

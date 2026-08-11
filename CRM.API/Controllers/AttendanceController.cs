@@ -102,6 +102,22 @@ public class AttendanceController : ControllerBase
         }
     }
 
+    /// <summary>Records the session's total hours (Pathways attendance-time reporting).</summary>
+    [HttpPut("session/{sessionId:guid}/hours")]
+    public async Task<IActionResult> SetSessionHours(Guid sessionId, [FromBody] SetSessionHoursDto dto)
+    {
+        if (dto.Hours is < 0 or > 24) return BadRequest(new { message = "Hours must be between 0 and 24." });
+        try
+        {
+            var ok = await _service.SetSessionHoursAsync(User.GetUserId(), sessionId, dto.Hours);
+            return ok ? NoContent() : NotFound();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
     [HttpPut("{recordId:guid}")]
     public async Task<IActionResult> UpdateRecord(Guid recordId, [FromBody] UpdateAttendanceDto dto)
     {

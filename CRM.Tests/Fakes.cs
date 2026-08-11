@@ -58,6 +58,7 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
     public IRepository<User> Users => UsersRepo;
     public IRepository<PerStarPlan> PerStarPlans => PerStarPlansRepo;
 
+    public IRepository<Volunteer> Volunteers { get; } = new FakeRepository<Volunteer>();
     public IRepository<ObjectiveArea> ObjectiveAreas { get; } = new FakeRepository<ObjectiveArea>();
     public IRepository<SubSkill> SubSkills { get; } = new FakeRepository<SubSkill>();
     public IRepository<Game> Games { get; } = new FakeRepository<Game>();

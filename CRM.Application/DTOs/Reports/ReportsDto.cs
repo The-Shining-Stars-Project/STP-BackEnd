@@ -7,6 +7,20 @@ public class ReportsDto
     public List<ProgramReportDto> Programs { get; set; } = new();
     public List<StaffOnboardingReportDto> StaffOnboarding { get; set; } = new();
     public AttendanceSummaryDto Attendance { get; set; } = new();
+    public List<StarAttendanceReportDto> StarAttendance { get; set; } = new();
+}
+
+/// <summary>Per-star attendance tally — presents, absences, and rate across all marked records.</summary>
+public class StarAttendanceReportDto
+{
+    public Guid ParticipantId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string ProgramName { get; set; } = string.Empty;
+    public string ProgramSlug { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public int Present { get; set; }
+    public int Absent { get; set; }
+    public int PresentRatePct { get; set; }
 }
 
 public class ReportTotalsDto

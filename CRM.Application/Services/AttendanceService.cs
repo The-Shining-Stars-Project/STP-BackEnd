@@ -272,8 +272,22 @@ public class AttendanceService : IAttendanceService
             Room = session.Room,
             Status = session.Status == SessionStatus.Submitted ? "submitted" : "open",
             SubmittedAt = session.SubmittedAt,
+            HoursLogged = session.HoursLogged,
             Entries = entries,
         };
+    }
+
+    public async Task<bool> SetSessionHoursAsync(Guid userId, Guid sessionId, decimal? hours)
+    {
+        var session = await _uow.Sessions.GetByIdAsync(sessionId);
+        if (session is null) return false;
+
+        (await _access.ForUserAsync(userId)).Require(session.ProgramId);
+
+        session.HoursLogged = hours;
+        await _uow.Sessions.UpdateAsync(session);
+        await _uow.SaveChangesAsync();
+        return true;
     }
 
     public async Task<bool> SubmitSessionAsync(Guid userId, Guid sessionId)

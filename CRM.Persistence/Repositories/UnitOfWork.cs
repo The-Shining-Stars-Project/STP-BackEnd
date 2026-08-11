@@ -12,6 +12,7 @@ public class UnitOfWork : IUnitOfWork
     {
         _db = db;
         Participants = new GenericRepository<Participant>(db);
+        Volunteers = new GenericRepository<Volunteer>(db);
         Staff = new GenericRepository<StaffMember>(db);
         Programs = new GenericRepository<CrmProgram>(db);
         ObjectiveAreas = new GenericRepository<ObjectiveArea>(db);
@@ -48,6 +49,7 @@ public class UnitOfWork : IUnitOfWork
     }
 
     public IRepository<Participant> Participants { get; }
+    public IRepository<Volunteer> Volunteers { get; }
     public IRepository<StaffMember> Staff { get; }
     public IRepository<CrmProgram> Programs { get; }
     public IRepository<ObjectiveArea> ObjectiveAreas { get; }

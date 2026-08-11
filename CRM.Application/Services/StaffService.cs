@@ -62,6 +62,8 @@ public class StaffService : IStaffService
             Initials = s.Initials,
             Role = s.Role,
             StartDate = s.StartDate.ToString("yyyy-MM-dd"),
+            EndDate = s.EndDate?.ToString("yyyy-MM-dd"),
+            IsFormer = s.EndDate is not null,
             OnboardingProgressPct = s.OnboardingProgressPct,
             ProgramNames = progNames,
             OnboardingItems = onboardingItems.Select(o => new OnboardingItemDto
@@ -124,6 +126,8 @@ public class StaffService : IStaffService
         if (dto.FullName is not null) member.FullName = dto.FullName;
         if (dto.Initials is not null) member.Initials = dto.Initials;
         if (dto.Role.HasValue) member.Role = dto.Role.Value;
+        if (dto.EndDate.HasValue) member.EndDate = dto.EndDate;
+        else if (dto.ClearEndDate) member.EndDate = null;
 
         await _uow.Staff.UpdateAsync(member);
         await _uow.SaveChangesAsync();
@@ -194,6 +198,8 @@ public class StaffService : IStaffService
             Initials = s.Initials,
             Role = s.Role,
             StartDate = s.StartDate.ToString("yyyy-MM-dd"),
+            EndDate = s.EndDate?.ToString("yyyy-MM-dd"),
+            IsFormer = s.EndDate is not null,
             OnboardingProgressPct = s.OnboardingProgressPct,
             ProgramNames = programNames,
         };

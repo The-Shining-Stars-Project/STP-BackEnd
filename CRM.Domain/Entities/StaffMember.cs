@@ -9,6 +9,10 @@ public class StaffMember : BaseEntity
     public string Initials { get; set; } = string.Empty;
     public StaffRole Role { get; set; } = StaffRole.Teacher;
     public DateTime StartDate { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Set when the staff member leaves — a non-null end date marks them as former.</summary>
+    public DateTime? EndDate { get; set; }
+
     public int OnboardingProgressPct { get; set; }
 
     public ICollection<StaffProgramAssignment> ProgramAssignments { get; set; } = new List<StaffProgramAssignment>();

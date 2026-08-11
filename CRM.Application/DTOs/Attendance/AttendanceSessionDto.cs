@@ -104,5 +104,15 @@ public class SessionRosterDto
     public string Status { get; set; } = "open";
     public DateTime? SubmittedAt { get; set; }
 
+    /// <summary>Total hours the session ran — recorded for Pathways reporting.</summary>
+    public decimal? HoursLogged { get; set; }
+
     public List<AttendanceRosterEntryDto> Entries { get; set; } = new();
+}
+
+/// <summary>Body for PUT /api/attendance/session/{id}/hours.</summary>
+public class SetSessionHoursDto
+{
+    /// <summary>Total hours for the session; null clears the value.</summary>
+    public decimal? Hours { get; set; }
 }

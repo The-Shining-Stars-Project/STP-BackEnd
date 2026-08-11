@@ -68,6 +68,33 @@ public class ReportsService : IReportsService
             OverdueTasks = tasks.Count(t => t.IsOverdue || t.Status == Domain.Enums.TaskStatus.Overdue),
         };
 
+        // Per-star attendance incl. absences — only statuses that track attendance.
+        var aggByParticipant = attendanceAgg.ToDictionary(a => a.ParticipantId);
+        var programById = programs.ToDictionary(p => p.Id);
+        var starAttendance = participants
+            .Where(p => p.Status is ParticipantStatus.Active or ParticipantStatus.Attention)
+            .Select(p =>
+            {
+                aggByParticipant.TryGetValue(p.Id, out var agg);
+                var present = agg?.PresentCount ?? 0;
+                var absent = agg?.AbsentCount ?? 0;
+                programById.TryGetValue(p.ProgramId, out var prog);
+                return new StarAttendanceReportDto
+                {
+                    ParticipantId = p.Id,
+                    Name = p.FullName,
+                    ProgramName = prog?.Name ?? string.Empty,
+                    ProgramSlug = prog?.Slug ?? string.Empty,
+                    Status = p.Status.ToString(),
+                    Present = present,
+                    Absent = absent,
+                    PresentRatePct = AttendanceStats.Percent(present, present + absent),
+                };
+            })
+            .OrderByDescending(s => s.Absent)
+            .ThenBy(s => s.Name)
+            .ToList();
+
         var staffOnboarding = staff
             .OrderBy(s => s.OnboardingProgressPct)
             .ThenBy(s => s.FullName)
@@ -79,6 +106,7 @@ public class ReportsService : IReportsService
             Totals = totals,
             Programs = programReports,
             StaffOnboarding = staffOnboarding,
+            StarAttendance = starAttendance,
             Attendance = new AttendanceSummaryDto
             {
                 Sessions = attendanceTotals.SessionCount,

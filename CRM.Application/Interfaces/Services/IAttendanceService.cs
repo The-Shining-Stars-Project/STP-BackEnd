@@ -45,6 +45,7 @@ public interface IAttendanceService
     /// not assigned to the session's program.
     /// </summary>
     Task<bool> SubmitSessionAsync(Guid userId, Guid sessionId);
+    Task<bool> SetSessionHoursAsync(Guid userId, Guid sessionId, decimal? hours);
 
     /// <summary>
     /// Today's roster from existing sessions/records only — no lazy creation, no writes —

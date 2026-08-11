@@ -28,4 +28,10 @@ public class UpdateStaffDto
 
     public StaffRole? Role { get; set; }
     public List<Guid>? ProgramIds { get; set; }
+
+    /// <summary>Sets the leaving date, marking the member as former.</summary>
+    public DateTime? EndDate { get; set; }
+
+    /// <summary>True clears the end date, restoring the member to active.</summary>
+    public bool ClearEndDate { get; set; }
 }
