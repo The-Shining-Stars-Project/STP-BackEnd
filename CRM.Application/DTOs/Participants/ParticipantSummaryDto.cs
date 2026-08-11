@@ -16,4 +16,14 @@ public class ParticipantSummaryDto
     public bool HasDocAlerts { get; set; }
     public int? BirthYear { get; set; }
     public string? ServiceCoordinator { get; set; }
+
+    // Intake information
+    public string? GuardianName { get; set; }
+    public string? GuardianPhone { get; set; }
+    public string? GuardianEmail { get; set; }
+    public string? ReferralSource { get; set; }
+    public string? TShirtSize { get; set; }
+    public string? IntakeNotes { get; set; }
+    /// <summary>yyyy-MM-dd, null when not set.</summary>
+    public string? AuthorizationExpiry { get; set; }
 }

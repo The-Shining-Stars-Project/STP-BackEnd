@@ -90,7 +90,9 @@ public class AttendanceService : IAttendanceService
         if (programs.Count == 0) return new List<ScheduledSessionDto>();
         var allowed = programs.Select(p => p.Id).ToHashSet();
 
-        var activeByProgram = (await _uow.Participants.ListAsync(p => p.Status == ParticipantStatus.Active))
+        // Attendance is tracked for Active and Needs-Attention stars (client rule).
+        var activeByProgram = (await _uow.Participants.ListAsync(
+                p => p.Status == ParticipantStatus.Active || p.Status == ParticipantStatus.Attention))
             .Where(p => allowed.Contains(p.ProgramId))
             .GroupBy(p => p.ProgramId)
             .ToDictionary(g => g.Key, g => g.Count());
@@ -168,7 +170,8 @@ public class AttendanceService : IAttendanceService
         }
 
         var participants = await _uow.Participants.ListAsync(
-            p => p.ProgramId == programId && p.Status == ParticipantStatus.Active);
+            p => p.ProgramId == programId
+                 && (p.Status == ParticipantStatus.Active || p.Status == ParticipantStatus.Attention));
 
         var recordByParticipant = (await _uow.Attendance.ListAsync(r => r.SessionId == session.Id))
             .GroupBy(r => r.ParticipantId)
@@ -210,7 +213,8 @@ public class AttendanceService : IAttendanceService
         if (session is null) return null;
 
         var participants = await _uow.Participants.ListAsync(
-            p => p.ProgramId == programId && p.Status == ParticipantStatus.Active);
+            p => p.ProgramId == programId
+                 && (p.Status == ParticipantStatus.Active || p.Status == ParticipantStatus.Attention));
 
         var recordByParticipant = (await _uow.Attendance.ListAsync(r => r.SessionId == session.Id))
             .GroupBy(r => r.ParticipantId)

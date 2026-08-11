@@ -12,6 +12,12 @@ public class ParticipantConfiguration : IEntityTypeConfiguration<Participant>
         builder.Property(p => p.FullName).IsRequired().HasMaxLength(200);
         builder.Property(p => p.Initials).IsRequired().HasMaxLength(5);
         builder.Property(p => p.ServiceCoordinator).HasMaxLength(200);
+        builder.Property(p => p.GuardianName).HasMaxLength(200);
+        builder.Property(p => p.GuardianPhone).HasMaxLength(50);
+        builder.Property(p => p.GuardianEmail).HasMaxLength(200);
+        builder.Property(p => p.ReferralSource).HasMaxLength(200);
+        builder.Property(p => p.TShirtSize).HasMaxLength(20);
+        builder.Property(p => p.IntakeNotes).HasMaxLength(2000);
 
         builder.HasOne(p => p.Program)
                .WithMany(pr => pr.Participants)

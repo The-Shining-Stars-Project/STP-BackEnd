@@ -22,7 +22,8 @@ public class GamesController : ControllerBase
         [FromQuery] Guid? objectiveAreaId,
         [FromQuery] Guid? subSkillId,
         [FromQuery] GameCategory? category,
-        [FromQuery] string? q)
+        [FromQuery] string? q,
+        [FromQuery] Guid? programId)
     {
         var games = await _service.QueryAsync(new GameFilter
         {
@@ -31,6 +32,7 @@ public class GamesController : ControllerBase
             SubSkillId = subSkillId,
             Category = category,
             Query = q,
+            ProgramId = programId,
         });
         return Ok(games);
     }

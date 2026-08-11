@@ -62,6 +62,13 @@ public class ParticipantService : IParticipantService
             HasDocAlerts = false,
             BirthYear = p.BirthYear,
             ServiceCoordinator = p.ServiceCoordinator,
+            GuardianName = p.GuardianName,
+            GuardianPhone = p.GuardianPhone,
+            GuardianEmail = p.GuardianEmail,
+            ReferralSource = p.ReferralSource,
+            TShirtSize = p.TShirtSize,
+            IntakeNotes = p.IntakeNotes,
+            AuthorizationExpiry = p.AuthorizationExpiry?.ToString("yyyy-MM-dd"),
             Documents = new(),
             RecentAttendance = new(),
         };
@@ -82,6 +89,13 @@ public class ParticipantService : IParticipantService
             BirthYear = dto.BirthYear,
             ServiceCoordinator = dto.ServiceCoordinator,
             StartDate = dto.StartDate ?? _clock.Today,
+            GuardianName = dto.GuardianName,
+            GuardianPhone = dto.GuardianPhone,
+            GuardianEmail = dto.GuardianEmail,
+            ReferralSource = dto.ReferralSource,
+            TShirtSize = dto.TShirtSize,
+            IntakeNotes = dto.IntakeNotes,
+            AuthorizationExpiry = dto.AuthorizationExpiry,
         };
 
         await _uow.Participants.AddAsync(participant);
@@ -109,6 +123,14 @@ public class ParticipantService : IParticipantService
         if (dto.Status.HasValue) participant.Status = dto.Status.Value;
         if (dto.BirthYear.HasValue) participant.BirthYear = dto.BirthYear;
         if (dto.ServiceCoordinator is not null) participant.ServiceCoordinator = dto.ServiceCoordinator;
+        if (dto.GuardianName is not null) participant.GuardianName = dto.GuardianName;
+        if (dto.GuardianPhone is not null) participant.GuardianPhone = dto.GuardianPhone;
+        if (dto.GuardianEmail is not null) participant.GuardianEmail = dto.GuardianEmail;
+        if (dto.ReferralSource is not null) participant.ReferralSource = dto.ReferralSource;
+        if (dto.TShirtSize is not null) participant.TShirtSize = dto.TShirtSize;
+        if (dto.IntakeNotes is not null) participant.IntakeNotes = dto.IntakeNotes;
+        if (dto.AuthorizationExpiry.HasValue) participant.AuthorizationExpiry = dto.AuthorizationExpiry;
+        else if (dto.ClearAuthorizationExpiry) participant.AuthorizationExpiry = null;
 
         await _uow.Participants.UpdateAsync(participant);
         await _uow.SaveChangesAsync();
@@ -145,5 +167,12 @@ public class ParticipantService : IParticipantService
             HasDocAlerts = false,
             BirthYear = p.BirthYear,
             ServiceCoordinator = p.ServiceCoordinator,
+            GuardianName = p.GuardianName,
+            GuardianPhone = p.GuardianPhone,
+            GuardianEmail = p.GuardianEmail,
+            ReferralSource = p.ReferralSource,
+            TShirtSize = p.TShirtSize,
+            IntakeNotes = p.IntakeNotes,
+            AuthorizationExpiry = p.AuthorizationExpiry?.ToString("yyyy-MM-dd"),
         };
 }

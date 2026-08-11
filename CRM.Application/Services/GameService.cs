@@ -27,6 +27,9 @@ public class GameService : IGameService
         if (filter.Category is { } cat)
             q = q.Where(g => g.Category == cat);
 
+        if (filter.ProgramId is { } progId)
+            q = q.Where(g => g.ProgramId is null || g.ProgramId == progId);
+
         if (filter.SubSkillId is { } subId)
             q = q.Where(g => ctx.SubGoalsByGame.TryGetValue(g.Id, out var sgs)
                              && sgs.Any(sg => sg.SubSkillId == subId));
@@ -66,6 +69,8 @@ public class GameService : IGameService
             Description = dto.Description,
             BestForVariations = dto.BestForVariations,
             WhenToUse = dto.WhenToUse,
+            Location = dto.Location,
+            ProgramId = dto.ProgramId,
         };
         await _uow.Games.AddAsync(game);
 
@@ -97,6 +102,8 @@ public class GameService : IGameService
         game.Description = dto.Description;
         game.BestForVariations = dto.BestForVariations;
         game.WhenToUse = dto.WhenToUse;
+        game.Location = dto.Location;
+        game.ProgramId = dto.ProgramId;
         await _uow.Games.UpdateAsync(game);
 
         // Replace the sub-goal set.
@@ -123,17 +130,20 @@ public class GameService : IGameService
     private sealed record Ctx(
         Dictionary<Guid, ObjectiveArea> AreaById,
         Dictionary<Guid, SubSkill> SubSkillById,
-        Dictionary<Guid, List<GameSubGoal>> SubGoalsByGame);
+        Dictionary<Guid, List<GameSubGoal>> SubGoalsByGame,
+        Dictionary<Guid, string> ProgramNameById);
 
     private async Task<Ctx> LoadContextAsync()
     {
         var areas = await _uow.ObjectiveAreas.GetAllAsync();
         var subSkills = await _uow.SubSkills.GetAllAsync();
         var subGoals = await _uow.GameSubGoals.GetAllAsync();
+        var programs = await _uow.Programs.GetAllAsync();
         return new Ctx(
             areas.ToDictionary(a => a.Id),
             subSkills.ToDictionary(s => s.Id),
-            subGoals.GroupBy(sg => sg.GameId).ToDictionary(g => g.Key, g => g.ToList()));
+            subGoals.GroupBy(sg => sg.GameId).ToDictionary(g => g.Key, g => g.ToList()),
+            programs.ToDictionary(p => p.Id, p => p.Name));
     }
 
     private static List<GameSubGoalDto> SubGoalDtos(Guid gameId, Ctx ctx)
@@ -171,6 +181,9 @@ public class GameService : IGameService
         dto.PrimaryObjectiveAreaName = area?.Name ?? "";
         dto.PrimaryObjectiveAreaColorHex = area?.ColorHex ?? "";
         dto.WhenToUse = g.WhenToUse;
+        dto.Location = g.Location;
+        dto.ProgramId = g.ProgramId;
+        dto.ProgramName = g.ProgramId is { } pid ? ctx.ProgramNameById.GetValueOrDefault(pid) : null;
         dto.SubGoals = SubGoalDtos(g.Id, ctx);
     }
 

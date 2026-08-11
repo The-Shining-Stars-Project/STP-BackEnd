@@ -26,6 +26,13 @@ public class Game : BaseEntity
     public string? BestForVariations { get; set; }
     public string? WhenToUse { get; set; }
 
+    /// <summary>Where the activity is typically run (room / site), free text.</summary>
+    public string? Location { get; set; }
+
+    /// <summary>Optional program this activity belongs to; null = usable by any program.</summary>
+    public Guid? ProgramId { get; set; }
+
+    public CrmProgram? Program { get; set; }
     public ObjectiveArea? PrimaryObjectiveArea { get; set; }
     public ICollection<GameSubGoal> SubGoals { get; set; } = new List<GameSubGoal>();
 }

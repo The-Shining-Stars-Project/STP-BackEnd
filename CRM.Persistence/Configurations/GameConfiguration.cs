@@ -14,7 +14,13 @@ public class GameConfiguration : IEntityTypeConfiguration<Game>
         builder.Property(g => g.Description).HasMaxLength(2000);
         builder.Property(g => g.BestForVariations).HasMaxLength(1000);
         builder.Property(g => g.WhenToUse).HasMaxLength(500);
+        builder.Property(g => g.Location).HasMaxLength(200);
         builder.HasIndex(g => g.Name);
+
+        builder.HasOne(g => g.Program)
+               .WithMany()
+               .HasForeignKey(g => g.ProgramId)
+               .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasOne(g => g.PrimaryObjectiveArea)
                .WithMany()
