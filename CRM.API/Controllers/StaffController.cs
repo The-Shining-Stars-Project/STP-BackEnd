@@ -15,8 +15,15 @@ public class StaffController : ControllerBase
     public StaffController(IStaffService service) => _service = service;
 
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<StaffSummaryDto>>> GetAll(CancellationToken ct) =>
-        Ok(await _service.GetAllAsync(ct));
+    public async Task<ActionResult<IReadOnlyList<StaffSummaryDto>>> GetAll(CancellationToken ct)
+    {
+        var staff = await _service.GetAllAsync(ct);
+        // Onboarding completion is admin-only (client rule) — non-admins still get the
+        // roster (names/roles/programs) but never anyone's checklist progress.
+        if (!User.IsInRole("Admin"))
+            foreach (var s in staff) s.OnboardingProgressPct = 0;
+        return Ok(staff);
+    }
 
     [HttpGet("{id:guid}")]
     [Authorize(Roles = "Admin")]
@@ -42,8 +49,9 @@ public class StaffController : ControllerBase
         return result is null ? NotFound() : Ok(result);
     }
 
+    // Admin-only like GetById — the response carries the full checklist.
     [HttpPut("{id:guid}/onboarding/{itemId:guid}")]
-    [Authorize(Policy = "ManagementWrite")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<StaffDetailDto>> SetOnboardingItem(Guid id, Guid itemId, [FromBody] SetOnboardingItemDto dto)
     {
         var result = await _service.SetOnboardingItemAsync(id, itemId, dto);
