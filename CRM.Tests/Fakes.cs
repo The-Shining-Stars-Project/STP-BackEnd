@@ -1,7 +1,12 @@
 using System.Linq.Expressions;
+using CRM.Application.DTOs.Audit;
 using CRM.Application.Interfaces;
+using CRM.Application.Interfaces.Services;
 using CRM.Domain.Common;
 using CRM.Domain.Entities;
+using CRM.Domain.Enums;
+using CRM.Infrastructure.Auth;
+using Microsoft.Extensions.Options;
 
 namespace CRM.Tests;
 
@@ -50,6 +55,9 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
     public FakeRepository<CrmProgram> ProgramsRepo { get; } = new();
     public FakeRepository<User> UsersRepo { get; } = new();
     public FakeRepository<PerStarPlan> PerStarPlansRepo { get; } = new();
+    public FakeRepository<RefreshToken> RefreshTokensRepo { get; } = new();
+    public FakeRepository<MfaChallenge> MfaChallengesRepo { get; } = new();
+    public FakeRepository<MfaRecoveryCode> MfaRecoveryCodesRepo { get; } = new();
     public List<StaffProgramAssignment> StaffProgramAssignments { get; } = new();
 
     public IRepository<Participant> Participants => ParticipantsRepo;
@@ -57,6 +65,9 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
     public IRepository<CrmProgram> Programs => ProgramsRepo;
     public IRepository<User> Users => UsersRepo;
     public IRepository<PerStarPlan> PerStarPlans => PerStarPlansRepo;
+    public IRepository<RefreshToken> RefreshTokens => RefreshTokensRepo;
+    public IRepository<MfaChallenge> MfaChallenges => MfaChallengesRepo;
+    public IRepository<MfaRecoveryCode> MfaRecoveryCodes => MfaRecoveryCodesRepo;
 
     public IRepository<Volunteer> Volunteers { get; } = new FakeRepository<Volunteer>();
     public IRepository<ObjectiveArea> ObjectiveAreas { get; } = new FakeRepository<ObjectiveArea>();
@@ -87,7 +98,6 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
     public IRepository<Script> Scripts { get; } = new FakeRepository<Script>();
     public IRepository<OnboardingItem> OnboardingItems { get; } = new FakeRepository<OnboardingItem>();
     public IRepository<ChecklistTemplateItem> ChecklistTemplateItems { get; } = new FakeRepository<ChecklistTemplateItem>();
-    public IRepository<RefreshToken> RefreshTokens { get; } = new FakeRepository<RefreshToken>();
 
     public Task<IReadOnlyList<StaffProgramAssignment>> GetStaffProgramAssignmentsAsync() =>
         Task.FromResult<IReadOnlyList<StaffProgramAssignment>>(StaffProgramAssignments.ToList());
@@ -109,7 +119,16 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
 
     public Task ReplaceScriptProgramsAsync(Guid scriptId, IReadOnlyCollection<Guid> programIds) => Task.CompletedTask;
 
-    public Task<int> SaveChangesAsync() => Task.FromResult(0);
+    /// <summary>
+    /// Set to make the next (and every subsequent) SaveChangesAsync throw this, standing in for
+    /// the DbUpdateConcurrencyException two admins editing the same user row really produce.
+    /// EF types are not referenced here, so tests pass whatever exception they want to see
+    /// recorded — only its TYPE NAME reaches the audit row.
+    /// </summary>
+    public Exception? SaveException { get; set; }
+
+    public Task<int> SaveChangesAsync() =>
+        SaveException is null ? Task.FromResult(0) : Task.FromException<int>(SaveException);
 }
 
 /// <summary>A clock frozen at a fixed local date, so date-dependent behaviour is deterministic.</summary>
@@ -120,6 +139,94 @@ internal sealed class FakeOrgClock : IOrgClock
     public DateTime Today { get; }
     public DateTime Now => Today.AddHours(17);
     public DateTime UtcNow => DateTime.UtcNow;
+}
+
+/// <summary>
+/// Captures the audit entries a service under test produced, so tests can assert on what was
+/// recorded. Mirrors the real service's central promise — it never throws — so a test can
+/// also verify that callers do not depend on it succeeding.
+/// </summary>
+internal sealed class FakeAuditService : IAuditService
+{
+    public List<AuditEntry> Entries { get; } = new();
+
+    /// <summary>
+    /// Set to make every write DROP its entry, the way a database outage looks from the
+    /// caller's side. Named for what it does: the real AuditService catches its own exceptions
+    /// and logs them, so a caller sees a successful-looking Task and no row. It does not throw,
+    /// and making it throw would not pin the contract either — it would only prove that
+    /// AuthService, which has no try/catch around its audit calls, propagates whatever it is
+    /// given. The contract belongs to AuditService, and pinning it there needs a test that can
+    /// reach CRM.Persistence, which this project deliberately does not reference.
+    /// </summary>
+    public bool FailSilently { get; set; }
+
+    public Task RecordAsync(AuditEntry entry, CancellationToken ct = default)
+    {
+        if (FailSilently) return Task.CompletedTask;
+
+        Entries.Add(entry);
+        return Task.CompletedTask;
+    }
+
+    public IEnumerable<AuditEntry> WithAction(string action) =>
+        Entries.Where(e => e.Action == action);
+
+    public AuditEntry Single(string action) => WithAction(action).Single();
+}
+
+/// <summary>Ambient request context with fixed values, or none at all.</summary>
+internal sealed class FakeAuditContextAccessor : IAuditContextAccessor
+{
+    public FakeAuditContextAccessor(AuditContext? current = null) => Current = current;
+
+    public AuditContext? Current { get; set; }
+}
+
+/// <summary>Issues a predictable token — the auth tests never inspect its contents.</summary>
+internal sealed class FakeTokenService : ITokenService
+{
+    public (string Token, DateTime ExpiresAt) CreateToken(User user, StaffRole? staffRole = null) =>
+        ($"token-for-{user.Id}", DateTime.UtcNow.AddHours(1));
+}
+
+/// <summary>
+/// Reversible stand-in for PBKDF2: "hash" is the password with a marker prefix. Keeps the
+/// auth tests fast and deterministic; PasswordHasherTests covers the real algorithm.
+/// </summary>
+internal sealed class FakePasswordHasher : IPasswordHasher
+{
+    public (string Hash, string Salt) HashPassword(string password) => ($"hashed:{password}", "salt");
+
+    public bool VerifyPassword(string password, string hash, string salt) => hash == $"hashed:{password}";
+}
+
+/// <summary>
+/// The real TotpService and MfaSecretProtector, wired for tests.
+///
+/// These two are NOT faked. Both are pure — no database, no clock they don't take as an
+/// argument — and they are the parts of the MFA flow most worth exercising for real: a fake
+/// TOTP validator would happily pass tests that the RFC would fail.
+/// </summary>
+internal static class TestMfa
+{
+    /// <summary>Base64 of 32 bytes. Not the production placeholder; nothing here is a secret.</summary>
+    private const string EncryptionKey = "dGVzdC1vbmx5LWFlcy1rZXktMzItYnl0ZXMtLi4uLi4=";
+
+    public static MfaSettings Settings => new()
+    {
+        EncryptionKey = EncryptionKey,
+        Required = true,
+        Issuer = "Shining Stars CRM",
+    };
+
+    public static TotpService Totp() => new(Options.Create(Settings));
+
+    public static MfaSecretProtector Protector() => new(Options.Create(Settings));
+
+    /// <summary>The code an authenticator would show for this secret at this instant.</summary>
+    public static string CodeAt(byte[] secret, DateTimeOffset when) =>
+        TotpService.ComputeCode(secret, TotpService.ComputeStep(when.ToUnixTimeSeconds()), 6);
 }
 
 /// <summary>No attendance history — the scoping tests don't assert on attendance percentages.</summary>

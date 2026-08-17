@@ -19,6 +19,18 @@ public class TokenService : ITokenService
     /// <summary>The linked staff member's role (Teacher/Coordinator/Admin), for management-write policies.</summary>
     public const string StaffRoleClaim = "staffRole";
 
+    /// <summary>
+    /// Whether the account has an enrolled second factor, as "true"/"false".
+    ///
+    /// INFORMATIONAL ONLY. It is stamped when the token is minted and stays that way for the
+    /// token's whole life (60 minutes in production), which means it is stale in the dangerous
+    /// direction: after an admin MFA reset the outstanding access cookie still claims true.
+    /// The server-side gate reads the current value from the database on every request
+    /// (see Program.cs OnTokenValidated and MfaEnforcementFilter). This claim exists so the
+    /// frontend's edge middleware can redirect an unenrolled user without a round-trip.
+    /// </summary>
+    public const string MfaClaim = "mfa";
+
     private readonly JwtSettings _settings;
 
     public TokenService(IOptions<JwtSettings> settings) => _settings = settings.Value;
@@ -34,6 +46,7 @@ public class TokenService : ITokenService
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
             new(NameClaim, user.FullName),
             new(RoleClaim, user.Role.ToString()),
+            new(MfaClaim, user.MfaEnabled ? "true" : "false"),
         };
         if (staffRole is { } sr)
             claims.Add(new Claim(StaffRoleClaim, sr.ToString()));

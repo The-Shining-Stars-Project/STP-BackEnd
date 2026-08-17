@@ -1,9 +1,11 @@
 using System.Security.Claims;
+using CRM.API.Filters;
 using CRM.Application.DTOs.Auth;
 using CRM.Application.Interfaces.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 
 namespace CRM.API.Controllers;
 
@@ -15,6 +17,14 @@ public class AuthController : ControllerBase
     public const string AccessCookie = "ss_access";
     /// <summary>Cookie holding the rotating refresh token (#17).</summary>
     public const string RefreshCookie = "ss_refresh";
+    /// <summary>
+    /// Cookie carrying the MFA challenge between the password step and the code step. It is
+    /// NOT a session: on its own it grants access to nothing except POST /api/auth/login/mfa.
+    /// </summary>
+    public const string MfaCookie = "ss_mfa";
+
+    /// <summary>The one response every failed code submission gets, whatever went wrong.</summary>
+    private const string GenericCodeFailure = "Invalid or expired code.";
 
     private readonly IAuthService _service;
     private readonly IWebHostEnvironment _env;
@@ -26,21 +36,82 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Exchange email + password for a session. Credentials are delivered as httpOnly
-    /// cookies; the body still includes the JWT for API clients (Swagger, scripts) and
-    /// older frontend builds.
+    /// The password step. For an account without a second factor this completes the sign-in
+    /// and sets the auth cookies. For an enrolled account it sets NOTHING except a short-lived
+    /// challenge cookie and returns <c>{ mfaRequired: true }</c> — the caller must then post a
+    /// code to <c>/api/auth/login/mfa</c>.
+    ///
+    /// BREAKING CHANGE: this used to return AuthResultDto directly. It now returns
+    /// LoginResponseDto, so the JWT moved from <c>.token</c> to <c>.auth.token</c>.
     /// </summary>
     [HttpPost("login")]
     [AllowAnonymous]
     [EnableRateLimiting("login")]
-    public async Task<ActionResult<AuthResultDto>> Login([FromBody] LoginDto dto)
+    public async Task<ActionResult<LoginResponseDto>> Login([FromBody] LoginDto dto)
     {
-        var session = await _service.LoginAsync(dto);
-        if (session is null)
+        var outcome = await _service.LoginAsync(dto);
+
+        if (!outcome.Authenticated)
             return Unauthorized(new { message = "Invalid email or password." });
 
-        SetAuthCookies(session);
-        return Ok(session.Auth);
+        if (outcome.MfaRequired)
+        {
+            SetMfaCookie(outcome.ChallengeToken!, outcome.ChallengeExpiresAt!.Value);
+            // No auth cookies, and any existing ones are deliberately left alone — clearing
+            // them would hand anyone with a stolen password a free way to log the real user
+            // out just by submitting it.
+            return Ok(new LoginResponseDto { MfaRequired = true });
+        }
+
+        SetAuthCookies(outcome.Session!);
+        // A stale challenge cookie from an abandoned attempt would otherwise sit there until
+        // it expired, and a browser that already holds a session has no use for one.
+        ClearMfaCookie();
+        return Ok(new LoginResponseDto { MfaRequired = false, Auth = outcome.Session!.Auth });
+    }
+
+    /// <summary>
+    /// The code step: exchanges the challenge cookie plus a TOTP or recovery code for a real
+    /// session. Rate-limited on its own budget rather than sharing the password step's: one
+    /// sign-in spends up to MfaChallenge.MaxAttempts requests here for a single request there,
+    /// so sharing let a few typos exhaust the whole organisation's ability to sign in.
+    ///
+    /// Every failure returns the identical 401. Distinguishing "wrong code" from "expired"
+    /// from "out of attempts" would tell an attacker how much of the challenge they had left.
+    /// </summary>
+    [HttpPost("login/mfa")]
+    [AllowAnonymous]
+    [EnableRateLimiting("login-mfa")]
+    public async Task<ActionResult<LoginResponseDto>> LoginMfa([FromBody] MfaVerifyDto dto)
+    {
+        MfaVerifyOutcome outcome;
+        try
+        {
+            outcome = await _service.VerifyMfaAsync(Request.Cookies[MfaCookie], dto.Code);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // User.RowVersion (#26) plus the LastTotpStep write means a double-submitted code
+            // — a double-click, or the frontend retrying — collides with itself. Caught here
+            // rather than in AuthService because CRM.Application has no EF reference. Left to
+            // GlobalExceptionHandler it would surface as a 409 "This item was changed by
+            // someone else while you were editing", which on a login screen is both baffling
+            // and distinguishable: it would tell the caller their code got as far as the user
+            // write, i.e. that it was correct.
+            return Unauthorized(new { message = GenericCodeFailure });
+        }
+
+        if (outcome.Session is null)
+        {
+            // The challenge survives only while attempts remain, so a mistyped digit leaves
+            // the user on the code screen instead of sending them back to the password.
+            if (!outcome.ChallengeSurvives) ClearMfaCookie();
+            return Unauthorized(new { message = GenericCodeFailure });
+        }
+
+        SetAuthCookies(outcome.Session);
+        ClearMfaCookie();
+        return Ok(new LoginResponseDto { MfaRequired = false, Auth = outcome.Session.Auth });
     }
 
     /// <summary>
@@ -64,7 +135,7 @@ public class AuthController : ControllerBase
         return Ok(session.Auth);
     }
 
-    /// <summary>Revokes the refresh token and clears both auth cookies.</summary>
+    /// <summary>Revokes the refresh token and clears every auth cookie, challenge included.</summary>
     [HttpPost("logout")]
     [AllowAnonymous]
     public async Task<IActionResult> Logout()
@@ -73,6 +144,9 @@ public class AuthController : ControllerBase
             await _service.LogoutAsync(raw);
 
         ClearAuthCookies();
+        // Logout is the one place that SHOULD kill a half-finished challenge: the user asked
+        // to stop. ClearAuthCookies must not do this on its own — see below.
+        ClearMfaCookie();
         return NoContent();
     }
 
@@ -102,15 +176,44 @@ public class AuthController : ControllerBase
         });
     }
 
+    /// <summary>
+    /// The challenge cookie. Same flags as the auth cookies, but it expires with the
+    /// challenge — five minutes, not fourteen days.
+    /// </summary>
+    private void SetMfaCookie(string token, DateTime expiresAt)
+    {
+        Response.Cookies.Append(MfaCookie, token, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = !_env.IsDevelopment(),
+            SameSite = SameSiteMode.Lax,
+            Path = "/",
+            Expires = expiresAt,
+        });
+    }
+
     private void ClearAuthCookies()
     {
         Response.Cookies.Delete(AccessCookie, new CookieOptions { Path = "/" });
         Response.Cookies.Delete(RefreshCookie, new CookieOptions { Path = "/" });
     }
 
+    /// <summary>
+    /// Deliberately separate from <see cref="ClearAuthCookies"/>, and it must stay that way.
+    /// The frontend's apiFetch fires a silent refresh on any 401, and a user sitting on the
+    /// code screen has no refresh token yet — so that refresh 401s and calls ClearAuthCookies.
+    /// If that also dropped ss_mfa, the challenge would die underneath the user for no reason
+    /// they could see, mid-login.
+    /// </summary>
+    private void ClearMfaCookie() =>
+        Response.Cookies.Delete(MfaCookie, new CookieOptions { Path = "/" });
+
     /// <summary>Returns the currently authenticated user.</summary>
+    // Exempt from the MFA gate: the frontend calls this to find out who it is talking to, and
+    // it has to work before enrollment or the enrollment page cannot render.
     [HttpGet("me")]
     [Authorize]
+    [MfaExempt]
     public async Task<ActionResult<UserDto>> Me()
     {
         var idClaim = User.FindFirstValue(ClaimTypes.NameIdentifier)
@@ -210,5 +313,156 @@ public class AuthController : ControllerBase
         {
             return Conflict(new { message = ex.Message });
         }
+    }
+
+    // =====================================================================================
+    // Multi-factor authentication
+    //
+    // Every action here catches InvalidOperationException explicitly. Left to
+    // GlobalExceptionHandler it becomes a 409 with the wrong body, which for "current password
+    // is incorrect" on the disable endpoint is actively misleading.
+    //
+    // The enrollment endpoints carry [MfaExempt] because a user who has not enrolled must be
+    // able to reach them — that is the entire escape hatch from the gate. The endpoints that
+    // require an existing enrollment do not, because their caller is enrolled by definition.
+    // =====================================================================================
+
+    /// <summary>Whether the caller has a second factor, and how many recovery codes are left.</summary>
+    [HttpGet("mfa/status")]
+    [Authorize]
+    [MfaExempt]
+    public async Task<ActionResult<MfaStatusDto>> MfaStatus()
+    {
+        var status = await _service.GetMfaStatusAsync(User.GetUserId());
+        return status is null ? Unauthorized() : Ok(status);
+    }
+
+    /// <summary>
+    /// Begins enrollment: returns the base32 secret for manual entry plus the otpauth:// URI,
+    /// which on a phone opens the authenticator directly. Nothing is enabled until
+    /// <see cref="MfaEnable"/> confirms a code.
+    ///
+    /// 409 if MFA is already on — a stray call must not clobber a working enrollment.
+    /// </summary>
+    [HttpPost("mfa/setup")]
+    [Authorize]
+    [MfaExempt]
+    [EnableRateLimiting("mfa-manage")]
+    public async Task<ActionResult<MfaSetupResultDto>> MfaSetup()
+    {
+        try
+        {
+            var result = await _service.SetupMfaAsync(User.GetUserId());
+            return result is null ? Unauthorized() : Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Confirms enrollment with a code from the authenticator and returns the ten recovery
+    /// codes. THIS IS THE ONLY TIME THEY ARE EVER SHOWN — there is no endpoint that retrieves
+    /// them again, only one that replaces them.
+    ///
+    /// Every pre-existing session is revoked (they never presented a second factor) and this
+    /// browser gets a fresh pair of cookies carrying mfa:true.
+    /// </summary>
+    [HttpPost("mfa/enable")]
+    [Authorize]
+    [MfaExempt]
+    [EnableRateLimiting("mfa-manage")]
+    public async Task<ActionResult<MfaEnableResultDto>> MfaEnable([FromBody] MfaEnableDto dto)
+    {
+        try
+        {
+            var outcome = await _service.EnableMfaAsync(User.GetUserId(), dto.Code);
+            if (outcome is null) return Unauthorized();
+
+            SetAuthCookies(outcome.Session);
+            return Ok(new MfaEnableResultDto { RecoveryCodes = outcome.RecoveryCodes });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Conflict(new { message = "That request collided with another. Try again." });
+        }
+    }
+
+    /// <summary>
+    /// Issues ten fresh recovery codes and destroys the old ten. Requires a current code, so
+    /// a hijacked session cannot mint itself a permanent way back in.
+    /// </summary>
+    [HttpPost("mfa/recovery-codes")]
+    [Authorize]
+    [EnableRateLimiting("mfa-manage")]
+    public async Task<ActionResult<MfaEnableResultDto>> MfaRegenerateRecoveryCodes([FromBody] MfaVerifyDto dto)
+    {
+        try
+        {
+            var codes = await _service.RegenerateRecoveryCodesAsync(User.GetUserId(), dto.Code);
+            return codes is null
+                ? Unauthorized()
+                : Ok(new MfaEnableResultDto { RecoveryCodes = codes });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Conflict(new { message = "That request collided with another. Try again." });
+        }
+    }
+
+    /// <summary>
+    /// Removes the caller's authenticator. Requires their password AND a current code.
+    ///
+    /// NAME IT "RESET MY AUTHENTICATOR APP" IN THE UI, not "turn off two-factor". While
+    /// Mfa:Required is true this does not disable anything: clearing enrollment means the very
+    /// next request is refused by the MFA gate, and the user is confined to the enrollment
+    /// endpoints until they set up a new authenticator. That is the correct behaviour for the
+    /// case it exists for — a new phone — but labelling it "disable" guarantees a bug report.
+    /// </summary>
+    [HttpPost("mfa/disable")]
+    [Authorize]
+    [EnableRateLimiting("mfa-manage")]
+    public async Task<IActionResult> MfaDisable([FromBody] MfaDisableDto dto)
+    {
+        try
+        {
+            var session = await _service.DisableMfaAsync(User.GetUserId(), dto.CurrentPassword, dto.Code);
+            if (session is null) return Unauthorized();
+
+            SetAuthCookies(session);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Conflict(new { message = "That request collided with another. Try again." });
+        }
+    }
+
+    /// <summary>
+    /// Clears another user's second factor. Admin only, for the lost-phone case.
+    ///
+    /// Revokes the target's sessions and their outstanding challenges, and returns nothing
+    /// about the secret — an admin who could read it could impersonate the user indefinitely.
+    /// The target must re-enroll before they can use the app again.
+    /// </summary>
+    [HttpPost("users/{id:guid}/mfa/reset")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> AdminResetMfa(Guid id)
+    {
+        var ok = await _service.AdminResetMfaAsync(id);
+        return ok ? NoContent() : NotFound();
     }
 }

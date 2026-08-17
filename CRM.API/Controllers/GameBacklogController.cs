@@ -1,5 +1,6 @@
 using CRM.Application.DTOs.Games;
 using CRM.Application.Interfaces.Services;
+using CRM.API.Auditing;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -18,6 +19,7 @@ public class GameBacklogController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<GameIdeaDto>>> GetIdeas() => Ok(await _service.GetIdeasAsync());
 
     [HttpPost("ideas")]
+    [Audited("gameidea.create", "GameIdea")]
     public async Task<ActionResult<GameIdeaDto>> CreateIdea([FromBody] CreateGameIdeaDto dto)
     {
         if (string.IsNullOrWhiteSpace(dto.Name)) return BadRequest("Name is required.");
@@ -29,6 +31,7 @@ public class GameBacklogController : ControllerBase
     // Proposing ideas and age-mods stays open to teachers.
     [HttpPost("ideas/{id:guid}/promote")]
     [Authorize(Policy = "ManagementWrite")]
+    [Audited("gameidea.promote", "GameIdea")]
     public async Task<ActionResult<GameIdeaDto>> Promote(Guid id)
     {
         var result = await _service.PromoteIdeaAsync(id);
@@ -39,6 +42,7 @@ public class GameBacklogController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<AgeModificationDto>>> GetAgeMods() => Ok(await _service.GetAgeModsAsync());
 
     [HttpPost("age-mods")]
+    [Audited("agemod.create", "AgeModification")]
     public async Task<ActionResult<AgeModificationDto>> CreateAgeMod([FromBody] CreateAgeModificationDto dto)
     {
         if (string.IsNullOrWhiteSpace(dto.GameName) || string.IsNullOrWhiteSpace(dto.Modification))

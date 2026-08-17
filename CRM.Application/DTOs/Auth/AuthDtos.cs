@@ -68,6 +68,13 @@ public class UserDto
     public UserRole Role { get; set; }
     public bool IsActive { get; set; }
     public Guid? StaffMemberId { get; set; }
+
+    /// <summary>
+    /// Whether this account has a confirmed second factor. Not a secret — knowing that an
+    /// account has MFA helps nobody who is not already authenticated — and the admin user
+    /// list needs it to show who is still unenrolled.
+    /// </summary>
+    public bool MfaEnabled { get; set; }
 }
 
 public class AuthResultDto

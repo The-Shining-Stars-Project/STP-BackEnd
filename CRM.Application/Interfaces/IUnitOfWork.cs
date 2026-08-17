@@ -41,6 +41,17 @@ public interface IUnitOfWork
     IRepository<ChecklistTemplateItem> ChecklistTemplateItems { get; }
     IRepository<User> Users { get; }
     IRepository<RefreshToken> RefreshTokens { get; }
+    IRepository<MfaChallenge> MfaChallenges { get; }
+    IRepository<MfaRecoveryCode> MfaRecoveryCodes { get; }
+
+    // AuditEvent is deliberately absent, and that is not an oversight to be tidied up later.
+    // Every other entity gets a repository here, but routing audit writes through this unit
+    // of work would enlist them in the caller's SaveChangesAsync — so a business operation
+    // that rolled back would take its own audit trail down with it, and the interesting case
+    // (the write that failed) would be the one that never got recorded. IAuditService owns
+    // audit persistence on a separate DbContext and a separate transaction. Adding
+    // IRepository<AuditEvent> here would also hand callers an update and delete path to an
+    // append-only table.
 
     // StaffProgramAssignment has a composite PK and does not extend BaseEntity,
     // so it is exposed via dedicated methods rather than a generic repository.

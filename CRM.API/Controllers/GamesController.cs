@@ -1,6 +1,7 @@
 using CRM.Application.DTOs.Games;
 using CRM.Application.Interfaces.Services;
 using CRM.Domain.Enums;
+using CRM.API.Auditing;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -46,6 +47,7 @@ public class GamesController : ControllerBase
 
     [HttpPost]
     [Authorize(Policy = "ManagementWrite")]
+    [Audited("game.create", "Game")]
     public async Task<ActionResult<GameDetailDto>> CreateGame([FromBody] CreateGameDto dto)
     {
         var created = await _service.CreateAsync(dto);
@@ -54,6 +56,7 @@ public class GamesController : ControllerBase
 
     [HttpPut("{id:guid}")]
     [Authorize(Policy = "ManagementWrite")]
+    [Audited("game.update", "Game")]
     public async Task<ActionResult<GameDetailDto>> UpdateGame(Guid id, [FromBody] UpdateGameDto dto)
     {
         var updated = await _service.UpdateAsync(id, dto);

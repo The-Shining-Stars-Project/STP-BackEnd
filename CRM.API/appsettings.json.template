@@ -29,5 +29,64 @@
     "Issuer": "ShinyStarCRM",
     "Audience": "ShinyStarCRM",
     "ExpiryMinutes": 480
+  },
+
+  "_comment_Mfa": [
+    "EncryptionKey encrypts every enrolled user's TOTP secret at rest (AES-256-GCM). It must",
+    "be base64 that decodes to EXACTLY 32 bytes: `openssl rand -base64 32`. Azure: set the",
+    "application setting Mfa__EncryptionKey. Never commit a real value.",
+    "",
+    "THERE IS NO KEY ROTATION. Lose or change this key and every enrolled secret becomes",
+    "undecryptable — the whole team falls back to recovery codes, then to admin resets. The",
+    "stored blob carries a version byte so rotation could be added later; it has not been.",
+    "",
+    "The development placeholder is publicly known, so dev TOTP secrets are encrypted under a",
+    "key anyone can read. That is fine for development and is exactly why a development",
+    "database must never be promoted to production. Startup refuses the placeholder outside",
+    "Development, the same way it refuses the Jwt:Key placeholder.",
+    "",
+    "Required=true is what makes MFA mandatory. Users who have not enrolled can still sign in,",
+    "but every endpoint except enrollment, /api/auth/me and logout returns 403 with",
+    "code=mfa_enrollment_required. Enforcement is server-side (MfaEnforcementFilter); the",
+    "frontend redirect is only a convenience.",
+    "",
+    "BREAK-GLASS: an admin who loses both their authenticator and their recovery codes has no",
+    "in-app way back, because the admin reset endpoint itself requires an Admin. The database",
+    "owner clears it directly:",
+    "  UPDATE Users SET MfaEnabled = 0, MfaSecret = NULL, LastTotpStep = 0, MfaEnabledAt = NULL",
+    "    WHERE Email = '<address>';",
+    "  DELETE FROM MfaRecoveryCodes WHERE UserId = (SELECT Id FROM Users WHERE Email = '<address>');",
+    "The audit log records the consequences (the re-enrollment that follows) but NOT the DB",
+    "edit itself — that is a real limitation, not an oversight."
+  ],
+  "Mfa": {
+    "EncryptionKey": "<base64 of 32 random bytes — set via the Mfa__EncryptionKey env var / Azure app setting, never commit a real value>",
+    "Required": true,
+    "Issuer": "Shining Stars CRM"
+  },
+
+  "_comment_ForwardedHeaders": [
+    "The frontend proxies every API call through its own origin, so the address this API",
+    "sees is the proxy's, not the client's. List the proxy's outbound IP address(es) here to",
+    "have X-Forwarded-For trusted from them — audit rows and the login rate limiter then see",
+    "the real client. Azure: ForwardedHeaders__KnownProxies__0, __1, ...",
+    "",
+    "Empty is the safe default and is what production should keep until the API is network-",
+    "restricted. This API is publicly reachable, so trusting X-Forwarded-For from ANY caller",
+    "would let an attacker forge a new address per request and defeat the login rate limit",
+    "entirely. Empty leaves the framework's loopback-only default, which is why local",
+    "development already works: the Next.js dev server calls from 127.0.0.1.",
+    "",
+    "The complete fix is to restrict network access to this API (App Service access",
+    "restrictions / private endpoint) so only the frontend can reach it; trusting the proxy",
+    "is safe once nobody else can call in. Do that, then set KnownProxies to the frontend's",
+    "egress address(es): until you do, every anonymous rate-limit budget (login, login-mfa)",
+    "is shared by the whole organisation rather than being per-client, and staff can throttle",
+    "each other while an attacker calling this API directly sits in a partition of their own.",
+    "",
+    "Not a secret — no startup guard, unlike Jwt:Key."
+  ],
+  "ForwardedHeaders": {
+    "KnownProxies": []
   }
 }

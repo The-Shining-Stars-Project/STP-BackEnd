@@ -20,6 +20,13 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher, PasswordHasher>();
         services.AddSingleton<ITokenService, TokenService>();
 
+        // --- Multi-factor authentication ---
+        // Both are stateless and hold only configuration, so singleton is right — and it
+        // means MfaSecretProtector's key validation runs once rather than per request.
+        services.Configure<MfaSettings>(configuration.GetSection("Mfa"));
+        services.AddSingleton<ITotpService, TotpService>();
+        services.AddSingleton<IMfaSecretProtector, MfaSecretProtector>();
+
         // --- Time ---
         // "Today" is a local-calendar question, not a UTC one (#7).
         services.Configure<Time.OrgTimeSettings>(configuration.GetSection(Time.OrgTimeSettings.SectionName));

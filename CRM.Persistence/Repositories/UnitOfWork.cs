@@ -46,6 +46,8 @@ public class UnitOfWork : IUnitOfWork
         ChecklistTemplateItems = new GenericRepository<ChecklistTemplateItem>(db);
         Users = new GenericRepository<User>(db);
         RefreshTokens = new GenericRepository<RefreshToken>(db);
+        MfaChallenges = new GenericRepository<MfaChallenge>(db);
+        MfaRecoveryCodes = new GenericRepository<MfaRecoveryCode>(db);
     }
 
     public IRepository<Participant> Participants { get; }
@@ -83,6 +85,8 @@ public class UnitOfWork : IUnitOfWork
     public IRepository<ChecklistTemplateItem> ChecklistTemplateItems { get; }
     public IRepository<User> Users { get; }
     public IRepository<RefreshToken> RefreshTokens { get; }
+    public IRepository<MfaChallenge> MfaChallenges { get; }
+    public IRepository<MfaRecoveryCode> MfaRecoveryCodes { get; }
 
     public async Task<IReadOnlyList<StaffProgramAssignment>> GetStaffProgramAssignmentsAsync() =>
         await _db.Set<StaffProgramAssignment>().AsNoTracking().ToListAsync();

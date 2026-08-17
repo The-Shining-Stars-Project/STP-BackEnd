@@ -5,10 +5,53 @@ namespace CRM.Application.Interfaces.Services;
 public interface IAuthService
 {
     /// <summary>
-    /// Validates credentials and returns a full session (JWT + rotating refresh token),
-    /// or null if they are invalid / inactive.
+    /// The password step. Returns a full session for an unenrolled user, an MFA challenge for
+    /// an enrolled one, or <see cref="LoginOutcome.Failed"/>.
+    ///
+    /// A correct password for an MFA-enrolled account issues NO session and sets NO auth
+    /// cookies — that is what makes the second factor mandatory rather than advisory.
     /// </summary>
-    Task<AuthSessionDto?> LoginAsync(LoginDto dto);
+    Task<LoginOutcome> LoginAsync(LoginDto dto);
+
+    /// <summary>
+    /// The code step: exchanges a challenge token plus a TOTP or recovery code for a real
+    /// session. Every failure is indistinguishable to the caller; the reason is recorded
+    /// server-side.
+    /// </summary>
+    Task<MfaVerifyOutcome> VerifyMfaAsync(string? challengeToken, string code);
+
+    /// <summary>
+    /// Starts enrollment: generates a secret and stores it unconfirmed. Throws
+    /// InvalidOperationException if MFA is already enabled, so a stray call cannot clobber a
+    /// working enrollment. Returns null if the user is gone.
+    /// </summary>
+    Task<MfaSetupResultDto?> SetupMfaAsync(Guid userId);
+
+    /// <summary>
+    /// Confirms enrollment with a code from the authenticator, issues ten recovery codes, and
+    /// revokes every existing refresh token before minting a fresh session — a token created
+    /// before enrollment represents a session that never presented a second factor.
+    /// Throws InvalidOperationException when there is no pending secret or the code is wrong.
+    /// </summary>
+    Task<MfaEnableOutcome?> EnableMfaAsync(Guid userId, string code);
+
+    /// <summary>Replaces all ten recovery codes. Requires a valid current code.</summary>
+    Task<IReadOnlyList<string>?> RegenerateRecoveryCodesAsync(Guid userId, string code);
+
+    /// <summary>
+    /// Clears the user's second factor. Requires their password AND a valid code, revokes
+    /// every session, and re-mints the caller's. Under Mfa:Required this does not turn MFA
+    /// off — it resets the authenticator, and the gate confines the user to re-enrollment.
+    /// </summary>
+    Task<AuthSessionDto?> DisableMfaAsync(Guid userId, string currentPassword, string code);
+
+    /// <summary>
+    /// Admin recovery for a lost phone: clears the target's secret, recovery codes and
+    /// outstanding challenges, and revokes their sessions. Reveals nothing about the secret.
+    /// </summary>
+    Task<bool> AdminResetMfaAsync(Guid targetUserId);
+
+    Task<MfaStatusDto?> GetMfaStatusAsync(Guid userId);
 
     /// <summary>
     /// Exchanges a valid refresh token for a new session, rotating the token (the old one

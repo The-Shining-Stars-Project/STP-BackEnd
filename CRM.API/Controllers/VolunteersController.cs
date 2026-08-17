@@ -1,3 +1,4 @@
+using CRM.API.Auditing;
 using CRM.Application.DTOs.Volunteers;
 using CRM.Application.Interfaces.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -15,10 +16,12 @@ public class VolunteersController : ControllerBase
     public VolunteersController(IVolunteerService service) => _service = service;
 
     [HttpGet]
+    [Audited("volunteer.list", "Volunteer")]
     public async Task<ActionResult<IReadOnlyList<VolunteerDto>>> GetAll(CancellationToken ct) =>
         Ok(await _service.GetAllAsync(ct));
 
     [HttpGet("{id:guid}")]
+    [Audited("volunteer.view", "Volunteer")]
     public async Task<ActionResult<VolunteerDto>> GetById(Guid id)
     {
         var result = await _service.GetByIdAsync(id);
@@ -27,6 +30,7 @@ public class VolunteersController : ControllerBase
 
     [HttpPost]
     [Authorize(Policy = "ManagementWrite")]
+    [Audited("volunteer.create", "Volunteer")]
     public async Task<ActionResult<VolunteerDto>> Create([FromBody] CreateVolunteerDto dto)
     {
         var result = await _service.CreateAsync(dto);
@@ -35,6 +39,7 @@ public class VolunteersController : ControllerBase
 
     [HttpPut("{id:guid}")]
     [Authorize(Policy = "ManagementWrite")]
+    [Audited("volunteer.update", "Volunteer")]
     public async Task<ActionResult<VolunteerDto>> Update(Guid id, [FromBody] UpdateVolunteerDto dto)
     {
         var result = await _service.UpdateAsync(id, dto);
@@ -43,6 +48,7 @@ public class VolunteersController : ControllerBase
 
     [HttpDelete("{id:guid}")]
     [Authorize(Roles = "Admin")]
+    [Audited("volunteer.delete", "Volunteer")]
     public async Task<IActionResult> Delete(Guid id)
     {
         var deleted = await _service.DeleteAsync(id);

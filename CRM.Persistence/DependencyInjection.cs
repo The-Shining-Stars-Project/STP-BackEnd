@@ -40,6 +40,12 @@ public static class DependencyInjection
 
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IStatsQueries, Queries.StatsQueries>();
+        services.AddScoped<IAuditQueries, Queries.AuditQueries>();
+
+        // Scoped rather than singleton because it depends on the scoped IAuditContextAccessor
+        // (who is making *this* request). IServiceScopeFactory is a singleton and is safe to
+        // inject into a scoped service — that is the direction that works.
+        services.AddScoped<Application.Interfaces.Services.IAuditService, Audit.AuditService>();
 
         return services;
     }

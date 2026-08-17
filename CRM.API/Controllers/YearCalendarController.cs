@@ -1,5 +1,6 @@
 using CRM.Application.DTOs.Calendar;
 using CRM.Application.Interfaces.Services;
+using CRM.API.Auditing;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -23,6 +24,7 @@ public class YearCalendarController : ControllerBase
 
     [HttpPut("theme")]
     [Authorize(Policy = "ManagementWrite")]
+    [Audited("calendar.theme.update", "CalendarTheme")]
     public async Task<ActionResult<CalendarThemeDto>> UpsertTheme([FromBody] UpsertCalendarThemeDto dto)
     {
         if (dto.Month < 1 || dto.Month > 12) return BadRequest("Month must be 1–12.");

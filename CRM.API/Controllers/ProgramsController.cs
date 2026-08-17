@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using CRM.Application.DTOs.Programs;
 using CRM.Application.Interfaces.Services;
+using CRM.API.Auditing;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -40,6 +41,7 @@ public class ProgramsController : ControllerBase
 
     [HttpPost]
     [Authorize(Policy = "ManagementWrite")]
+    [Audited("program.create", "Program")]
     public async Task<ActionResult<ProgramSummaryDto>> Create([FromBody] CreateProgramDto dto)
     {
         var result = await _service.CreateAsync(dto);
@@ -48,19 +50,32 @@ public class ProgramsController : ControllerBase
 
     [HttpPut("{id:guid}")]
     [Authorize(Policy = "ManagementWrite")]
+    [Audited("program.update", "Program")]
     public async Task<ActionResult<ProgramSummaryDto>> Update(Guid id, [FromBody] UpdateProgramDto dto)
     {
         var result = await _service.UpdateAsync(id, dto);
         return result is null ? NotFound() : Ok(result);
     }
 
+    // Program membership decides which children's records a staff account may read, so these
+    // two are authorization changes, not roster edits. Without them the log can show an account
+    // reading twelve participant detail records with nothing explaining how it gained the scope
+    // to do so. EntityId is the account whose access changed; the program rides in metadata.
     [HttpPost("{id:guid}/staff/{staffId:guid}")]
     [Authorize(Policy = "ManagementWrite")]
+    [Audited("program.staff.grant", "StaffMember",
+        IdRouteKey = "staffId",
+        MetadataRouteKeys = ["id"],
+        Summary = "Granted a staff account access to a program")]
     public async Task<IActionResult> AssignStaff(Guid id, Guid staffId) =>
         await _service.AssignStaffAsync(id, staffId) ? NoContent() : NotFound();
 
     [HttpDelete("{id:guid}/staff/{staffId:guid}")]
     [Authorize(Policy = "ManagementWrite")]
+    [Audited("program.staff.revoke", "StaffMember",
+        IdRouteKey = "staffId",
+        MetadataRouteKeys = ["id"],
+        Summary = "Revoked a staff account's access to a program")]
     public async Task<IActionResult> UnassignStaff(Guid id, Guid staffId) =>
         await _service.UnassignStaffAsync(id, staffId) ? NoContent() : NotFound();
 }

@@ -1,3 +1,4 @@
+using CRM.API.Auditing;
 using CRM.Application.DTOs.Staff;
 using CRM.Application.Interfaces.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -14,7 +15,9 @@ public class StaffController : ControllerBase
 
     public StaffController(IStaffService service) => _service = service;
 
+    // The source of the staff-onboarding CSV export.
     [HttpGet]
+    [Audited("staff.list", "StaffMember")]
     public async Task<ActionResult<IReadOnlyList<StaffSummaryDto>>> GetAll(CancellationToken ct)
     {
         var staff = await _service.GetAllAsync(ct);
@@ -27,6 +30,7 @@ public class StaffController : ControllerBase
 
     [HttpGet("{id:guid}")]
     [Authorize(Roles = "Admin")]
+    [Audited("staff.view", "StaffMember")]
     public async Task<ActionResult<StaffDetailDto>> GetById(Guid id)
     {
         var result = await _service.GetByIdAsync(id);
@@ -35,6 +39,7 @@ public class StaffController : ControllerBase
 
     [HttpPost]
     [Authorize(Policy = "ManagementWrite")]
+    [Audited("staff.create", "StaffMember")]
     public async Task<ActionResult<StaffDetailDto>> Create([FromBody] CreateStaffDto dto)
     {
         var result = await _service.CreateAsync(dto);
@@ -43,6 +48,7 @@ public class StaffController : ControllerBase
 
     [HttpPut("{id:guid}")]
     [Authorize(Policy = "ManagementWrite")]
+    [Audited("staff.update", "StaffMember")]
     public async Task<ActionResult<StaffDetailDto>> Update(Guid id, [FromBody] UpdateStaffDto dto)
     {
         var result = await _service.UpdateAsync(id, dto);
@@ -50,14 +56,18 @@ public class StaffController : ControllerBase
     }
 
     // Admin-only like GetById — the response carries the full checklist.
+    // EntityId resolves to the staff member's id rather than the checklist item's, which is
+    // the right subject: the question this row answers is "who changed this person's record".
     [HttpPut("{id:guid}/onboarding/{itemId:guid}")]
     [Authorize(Roles = "Admin")]
+    [Audited("staff.onboarding.update", "StaffMember")]
     public async Task<ActionResult<StaffDetailDto>> SetOnboardingItem(Guid id, Guid itemId, [FromBody] SetOnboardingItemDto dto)
     {
         var result = await _service.SetOnboardingItemAsync(id, itemId, dto);
         return result is null ? NotFound() : Ok(result);
     }
 
+    // Not audited: reference data, the same for everyone, no PII in the response.
     [HttpGet("checklist-template")]
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<IReadOnlyList<ChecklistTemplateItemDto>>> GetChecklistTemplate() =>
@@ -65,6 +75,7 @@ public class StaffController : ControllerBase
 
     [HttpPut("checklist-template")]
     [Authorize(Policy = "ManagementWrite")]
+    [Audited("staff.checklist.update", "ChecklistTemplateItem")]
     public async Task<ActionResult<IReadOnlyList<ChecklistTemplateItemDto>>> UpdateChecklistTemplate([FromBody] UpdateChecklistTemplateDto dto) =>
         Ok(await _service.UpdateChecklistTemplateAsync(dto));
 }

@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using CRM.Application.DTOs.Roster;
 using CRM.Application.Interfaces.Services;
+using CRM.API.Auditing;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -41,6 +42,7 @@ public class RosterController : ControllerBase
     /// <summary>Creates or updates a participant's assignment for a term. Management only.</summary>
     [HttpPut("assignment")]
     [Authorize(Policy = "ManagementWrite")]
+    [Audited("roster.assignment.update", "RosterAssignment")]
     public async Task<ActionResult<RosterEntryDto>> UpsertAssignment([FromBody] UpsertRosterAssignmentDto dto)
     {
         if (dto.Year < 2020 || dto.Quarter < 1 || dto.Quarter > 4)

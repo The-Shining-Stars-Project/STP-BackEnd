@@ -45,6 +45,14 @@ public class AppDbContext : DbContext
     public DbSet<ChecklistTemplateItem> ChecklistTemplateItems { get; set; }
     public DbSet<User> Users { get; set; }
     public DbSet<RefreshToken> RefreshTokens { get; set; }
+    public DbSet<MfaChallenge> MfaChallenges { get; set; }
+    public DbSet<MfaRecoveryCode> MfaRecoveryCodes { get; set; }
+
+    /// <summary>
+    /// Append-only security log. Written through AuditService on its own DI scope (its own
+    /// context and transaction), never through the request's unit of work — see IUnitOfWork.
+    /// </summary>
+    public DbSet<AuditEvent> AuditEvents { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

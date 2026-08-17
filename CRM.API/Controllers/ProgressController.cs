@@ -1,5 +1,6 @@
 using CRM.Application.DTOs.Progress;
 using CRM.Application.Interfaces.Services;
+using CRM.API.Auditing;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -29,6 +30,7 @@ public class ProgressController : ControllerBase
 
     [HttpPut("focus-skills")]
     [Authorize(Policy = "ManagementWrite")]
+    [Audited("progress.focusskills.update", "WeeklyFocusSkill")]
     public async Task<ActionResult<IReadOnlyList<WeeklyFocusSkillDto>>> SetFocusSkills([FromBody] SetFocusSkillsDto dto)
     {
         if (dto.ProgramId == Guid.Empty || string.IsNullOrWhiteSpace(dto.MonthKey) || dto.WeekNumber < 1)
@@ -37,6 +39,7 @@ public class ProgressController : ControllerBase
     }
 
     [HttpPost("weekly")]
+    [Audited("progress.weekly.record", "WeeklyDataEntry")]
     public async Task<ActionResult<WeeklyDataEntryDto>> RecordWeekly([FromBody] RecordWeeklyScoreDto dto)
     {
         if (dto.ParticipantId == Guid.Empty || dto.SubSkillId == Guid.Empty || string.IsNullOrWhiteSpace(dto.MonthKey) || dto.WeekNumber < 1)
@@ -45,7 +48,10 @@ public class ProgressController : ControllerBase
         return result is null ? NotFound() : Ok(result);
     }
 
+    // A named child's month of scores, notes and narrative. Read-auditing here for the same
+    // reason as GET /api/participants/{id}: this is the record, not a list page.
     [HttpGet("star/{participantId:guid}")]
+    [Audited("progress.star.view", "Participant")]
     public async Task<ActionResult<StarMonthDto>> GetStarMonth(Guid participantId, [FromQuery] string month)
     {
         if (string.IsNullOrWhiteSpace(month)) return BadRequest("month is required.");
@@ -54,6 +60,7 @@ public class ProgressController : ControllerBase
     }
 
     [HttpPost("star/{participantId:guid}/compute")]
+    [Audited("progress.monthend.compute", "Participant")]
     public async Task<ActionResult<IReadOnlyList<MonthlyProgressSnapshotDto>>> ComputeMonthEnd(Guid participantId, [FromQuery] string month)
     {
         if (string.IsNullOrWhiteSpace(month)) return BadRequest("month is required.");
@@ -62,6 +69,7 @@ public class ProgressController : ControllerBase
     }
 
     [HttpPost("star/{participantId:guid}/confirm")]
+    [Audited("progress.monthend.confirm", "Participant")]
     public async Task<ActionResult<MonthlyProgressSnapshotDto>> ConfirmMonthEnd(
         Guid participantId, [FromQuery] string month, [FromBody] ConfirmMonthEndDto dto)
     {
@@ -70,7 +78,10 @@ public class ProgressController : ControllerBase
         return result is null ? NotFound() : Ok(result);
     }
 
+    // Free-text, clinical-adjacent narrative about a named child — the most sensitive thing
+    // written anywhere in the app after the participant record itself.
     [HttpPost("star/{participantId:guid}/note")]
+    [Audited("progress.note.update", "Participant")]
     public async Task<ActionResult<WeeklyNoteSelectionDto>> UpsertNote(
         Guid participantId, [FromQuery] string month, [FromBody] UpsertNoteSelectionDto dto)
     {
@@ -80,6 +91,7 @@ public class ProgressController : ControllerBase
     }
 
     [HttpPut("star/{participantId:guid}/summary")]
+    [Audited("progress.summary.update", "Participant")]
     public async Task<ActionResult<MonthlySummaryDto>> UpsertSummary(
         Guid participantId, [FromQuery] string month, [FromBody] UpsertMonthlySummaryDto dto)
     {

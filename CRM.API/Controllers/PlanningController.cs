@@ -1,5 +1,6 @@
 using CRM.Application.DTOs.Planning;
 using CRM.Application.Interfaces.Services;
+using CRM.API.Auditing;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -37,6 +38,7 @@ public class PlanningController : ControllerBase
     }
 
     [HttpPut("per-star")]
+    [Audited("planning.perstar.update", "PerStarPlan")]
     public async Task<ActionResult<PerStarPlanDto>> UpsertPerStar([FromBody] UpsertPerStarPlanDto dto)
     {
         if (dto.ParticipantId == Guid.Empty || string.IsNullOrWhiteSpace(dto.MonthKey))

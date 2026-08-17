@@ -2,6 +2,7 @@ using System.Security.Claims;
 using CRM.Application.DTOs.Attendance;
 using CRM.Application.Interfaces;
 using CRM.Application.Interfaces.Services;
+using CRM.API.Auditing;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -58,6 +59,7 @@ public class AttendanceController : ControllerBase
 
     /// <summary>Opens (gets or creates) the session for a program on a date and returns its roster.</summary>
     [HttpPost("session")]
+    [Audited("attendance.session.open", "Session")]
     public async Task<ActionResult<SessionRosterDto>> OpenSession([FromBody] OpenSessionDto dto)
     {
         var when = dto.Date?.Date ?? _clock.Today;
@@ -89,6 +91,7 @@ public class AttendanceController : ControllerBase
 
     /// <summary>Finalizes a session, locking its records.</summary>
     [HttpPost("session/{sessionId:guid}/submit")]
+    [Audited("attendance.session.submit", "Session")]
     public async Task<IActionResult> SubmitSession(Guid sessionId)
     {
         try
@@ -104,6 +107,7 @@ public class AttendanceController : ControllerBase
 
     /// <summary>Records the session's total hours (Pathways attendance-time reporting).</summary>
     [HttpPut("session/{sessionId:guid}/hours")]
+    [Audited("attendance.session.hours", "Session")]
     public async Task<IActionResult> SetSessionHours(Guid sessionId, [FromBody] SetSessionHoursDto dto)
     {
         if (dto.Hours is < 0 or > 24) return BadRequest(new { message = "Hours must be between 0 and 24." });
@@ -119,6 +123,7 @@ public class AttendanceController : ControllerBase
     }
 
     [HttpPut("{recordId:guid}")]
+    [Audited("attendance.record.update", "AttendanceRecord")]
     public async Task<IActionResult> UpdateRecord(Guid recordId, [FromBody] UpdateAttendanceDto dto)
     {
         try
@@ -137,6 +142,7 @@ public class AttendanceController : ControllerBase
     }
 
     [HttpPost("{recordId:guid}/notes")]
+    [Audited("attendance.note.create", "AttendanceRecord")]
     public async Task<ActionResult<AttendanceNoteDto>> AddNote(Guid recordId, [FromBody] CreateAttendanceNoteDto dto)
     {
         try
