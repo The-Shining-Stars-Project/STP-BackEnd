@@ -819,10 +819,42 @@ public class AuthService : IAuthService
         return session;
     }
 
-    public async Task<bool> AdminResetMfaAsync(Guid targetUserId)
+    public async Task<bool> AdminResetMfaAsync(Guid targetUserId, Guid actingUserId, string? currentPassword = null)
     {
         var user = await _uow.Users.GetByIdAsync(targetUserId);
         if (user is null) return false;
+
+        // Self-reset re-authenticates. Resetting another account is an administrative act on
+        // somebody else's credential and an admin session is the right authority for it;
+        // resetting your OWN is the same privilege DisableMfaAsync guards with password AND
+        // code, so letting a bare session do it here would route around that guard entirely —
+        // steal a cookie, strip the factor, and the account is back to password-only. The
+        // password is the half of that pair a stolen session does not carry. A code is not
+        // demanded too, because the lost-authenticator case is precisely why this path exists.
+        if (targetUserId == actingUserId)
+        {
+            if (string.IsNullOrEmpty(currentPassword)
+                || !_hasher.VerifyPassword(currentPassword, user.PasswordHash, user.PasswordSalt))
+            {
+                await _audit.RecordAsync(new AuditEntry
+                {
+                    Action = "auth.mfa.reset.admin",
+                    EntityType = "User",
+                    EntityId = targetUserId,
+                    Succeeded = false,
+                    Summary = "Refused self-reset of two-factor authentication",
+                    Metadata = Json(new
+                    {
+                        targetEmail = user.Email,
+                        reason = string.IsNullOrEmpty(currentPassword)
+                            ? "password not supplied"
+                            : "password incorrect",
+                    }),
+                });
+                throw new InvalidOperationException(
+                    "Resetting your own second factor requires your current password.");
+            }
+        }
 
         var now = DateTime.UtcNow;
         await ClearMfaAsync(user);

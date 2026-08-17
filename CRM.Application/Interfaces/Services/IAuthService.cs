@@ -48,8 +48,16 @@ public interface IAuthService
     /// <summary>
     /// Admin recovery for a lost phone: clears the target's secret, recovery codes and
     /// outstanding challenges, and revokes their sessions. Reveals nothing about the secret.
+    ///
+    /// Resetting SOMEONE ELSE needs only an admin session — that is the lost-phone case, and
+    /// the target's sessions die with it. Resetting YOURSELF additionally requires
+    /// <paramref name="currentPassword"/>: without that, an attacker holding nothing but a
+    /// stolen admin cookie could strip the account's own second factor, which is exactly what
+    /// <see cref="DisableMfaAsync"/> demands password AND code to prevent. Self-reset is still
+    /// permitted because forbidding it strands a lone admin who has recovery codes but no
+    /// authenticator — DisableMfaAsync cannot help them, it validates TOTP only.
     /// </summary>
-    Task<bool> AdminResetMfaAsync(Guid targetUserId);
+    Task<bool> AdminResetMfaAsync(Guid targetUserId, Guid actingUserId, string? currentPassword = null);
 
     Task<MfaStatusDto?> GetMfaStatusAsync(Guid userId);
 

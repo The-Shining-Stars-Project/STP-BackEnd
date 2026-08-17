@@ -135,6 +135,16 @@ public class MfaDisableDto
     public string Code { get; set; } = string.Empty;
 }
 
+/// <summary>
+/// Body for the admin MFA reset. Empty when resetting somebody else — an admin session is
+/// the authority there. CurrentPassword is required only when an admin targets their own
+/// account, so that a stolen session cannot strip its own second factor.
+/// </summary>
+public class AdminResetMfaDto
+{
+    public string? CurrentPassword { get; set; }
+}
+
 public class MfaStatusDto
 {
     public bool Enabled { get; set; }

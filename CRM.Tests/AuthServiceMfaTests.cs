@@ -25,6 +25,9 @@ public class AuthServiceMfaTests
     private static readonly Guid PlainId = Guid.Parse("22222222-0000-0000-0000-0000000000e2");
     private static readonly Guid InactiveId = Guid.Parse("33333333-0000-0000-0000-0000000000e3");
 
+    /// <summary>A second admin, so a reset of somebody else is visibly not a self-reset.</summary>
+    private static readonly Guid OtherAdminId = Guid.Parse("44444444-0000-0000-0000-0000000000e4");
+
     private const string EnrolledEmail = "enrolled@example.org";
     private const string PlainEmail = "plain@example.org";
 
@@ -393,7 +396,7 @@ public class AuthServiceMfaTests
         await GuessWronglyAsync(10);
         Assert.NotNull(Enrolled.MfaLockedUntil);
 
-        await _service.AdminResetMfaAsync(EnrolledId);
+        await _service.AdminResetMfaAsync(EnrolledId, OtherAdminId);
 
         Assert.Null(Enrolled.MfaLockedUntil);
         Assert.Equal(0, Enrolled.FailedMfaAttempts);
@@ -490,7 +493,7 @@ public class AuthServiceMfaTests
     public async Task A_challenge_survives_an_admin_reset_only_as_a_dead_one()
     {
         var login = await LoginAsync(EnrolledEmail);
-        await _service.AdminResetMfaAsync(EnrolledId);
+        await _service.AdminResetMfaAsync(EnrolledId, OtherAdminId);
 
         // The user is mid-challenge when their enrollment is wiped. Nothing they type can be
         // right, so the challenge dies rather than letting them burn attempts.
@@ -722,7 +725,7 @@ public class AuthServiceMfaTests
         _uow.MfaRecoveryCodesRepo.Items.Add(new MfaRecoveryCode { UserId = EnrolledId, CodeHash = "x" });
         var storedSecret = Enrolled.MfaSecret!;
 
-        var ok = await _service.AdminResetMfaAsync(EnrolledId);
+        var ok = await _service.AdminResetMfaAsync(EnrolledId, OtherAdminId);
 
         Assert.True(ok);
         Assert.False(Enrolled.MfaEnabled);
@@ -745,7 +748,68 @@ public class AuthServiceMfaTests
 
     [Fact]
     public async Task Admin_reset_of_an_unknown_user_reports_not_found() =>
-        Assert.False(await _service.AdminResetMfaAsync(Guid.NewGuid()));
+        Assert.False(await _service.AdminResetMfaAsync(Guid.NewGuid(), OtherAdminId));
+
+    // ---------- self-reset ----------
+    //
+    // Found by driving the running API, not by reading it: an admin session alone used to
+    // clear that same account's second factor. DisableMfaAsync demands password AND code so a
+    // stolen session cannot do exactly this; the reset endpoint took neither, so a stolen
+    // cookie walked around that guard and left the account on password-only.
+
+    [Fact]
+    public async Task Self_reset_without_the_password_is_refused()
+    {
+        var admin = _uow.UsersRepo.Items.Single(u => u.Id == PlainId);
+        admin.MfaEnabled = true;
+        admin.MfaSecret = _protector.Protect(PlainId, _secret);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _service.AdminResetMfaAsync(PlainId, PlainId));
+
+        Assert.True(admin.MfaEnabled);
+        Assert.NotNull(admin.MfaSecret);
+    }
+
+    [Fact]
+    public async Task Self_reset_with_the_wrong_password_is_refused_and_audited()
+    {
+        var admin = _uow.UsersRepo.Items.Single(u => u.Id == PlainId);
+        admin.MfaEnabled = true;
+        admin.MfaSecret = _protector.Protect(PlainId, _secret);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _service.AdminResetMfaAsync(PlainId, PlainId, WrongPassword));
+
+        Assert.True(admin.MfaEnabled);
+        var entry = _audit.Entries.Last(e => e.Action == "auth.mfa.reset.admin");
+        Assert.False(entry.Succeeded);
+        Assert.DoesNotContain(GoodPassword, System.Text.Json.JsonSerializer.Serialize(entry));
+    }
+
+    [Fact]
+    public async Task Self_reset_with_the_password_succeeds_so_a_lone_admin_is_not_stranded()
+    {
+        // The reason this path stays open at all: DisableMfaAsync validates TOTP only, so an
+        // admin holding recovery codes but no authenticator has no other way back.
+        var admin = _uow.UsersRepo.Items.Single(u => u.Id == PlainId);
+        admin.MfaEnabled = true;
+        admin.MfaSecret = _protector.Protect(PlainId, _secret);
+
+        Assert.True(await _service.AdminResetMfaAsync(PlainId, PlainId, GoodPassword));
+
+        Assert.False(admin.MfaEnabled);
+        Assert.Null(admin.MfaSecret);
+    }
+
+    [Fact]
+    public async Task Resetting_someone_else_still_needs_no_password()
+    {
+        // The lost-phone case: the admin cannot know the target's password, and requiring one
+        // would make the endpoint useless for the only job it has.
+        Assert.True(await _service.AdminResetMfaAsync(EnrolledId, OtherAdminId));
+        Assert.False(Enrolled.MfaEnabled);
+    }
 
     // ---------- test helpers ----------
 

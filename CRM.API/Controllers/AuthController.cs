@@ -452,17 +452,29 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Clears another user's second factor. Admin only, for the lost-phone case.
+    /// Clears a user's second factor. Admin only, for the lost-phone case.
     ///
     /// Revokes the target's sessions and their outstanding challenges, and returns nothing
     /// about the secret — an admin who could read it could impersonate the user indefinitely.
     /// The target must re-enroll before they can use the app again.
+    ///
+    /// Targeting your OWN account additionally requires currentPassword in the body: an admin
+    /// session alone must not be able to strip its own second factor, or a stolen cookie
+    /// walks straight around the password-AND-code guard on /mfa/disable.
     /// </summary>
     [HttpPost("users/{id:guid}/mfa/reset")]
     [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> AdminResetMfa(Guid id)
+    [EnableRateLimiting("mfa-manage")]
+    public async Task<IActionResult> AdminResetMfa(Guid id, [FromBody] AdminResetMfaDto? dto = null)
     {
-        var ok = await _service.AdminResetMfaAsync(id);
-        return ok ? NoContent() : NotFound();
+        try
+        {
+            var ok = await _service.AdminResetMfaAsync(id, User.GetUserId(), dto?.CurrentPassword);
+            return ok ? NoContent() : NotFound();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 }
