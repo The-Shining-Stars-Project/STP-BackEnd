@@ -64,7 +64,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasIndex("TeacherSuggestedId");
 
-                    b.ToTable("AgeModifications");
+                    b.ToTable("AgeModifications", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.AttendanceNote", b =>
@@ -96,7 +96,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasIndex("AttendanceRecordId");
 
-                    b.ToTable("AttendanceNotes");
+                    b.ToTable("AttendanceNotes", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.AttendanceRecord", b =>
@@ -137,7 +137,7 @@ namespace CRM.Persistence.Migrations
                     b.HasIndex("SessionId", "ParticipantId")
                         .IsUnique();
 
-                    b.ToTable("AttendanceRecords");
+                    b.ToTable("AttendanceRecords", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.AuditEvent", b =>
@@ -210,7 +210,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasIndex("UserId", "OccurredAt");
 
-                    b.ToTable("AuditEvents");
+                    b.ToTable("AuditEvents", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.CalendarEvent", b =>
@@ -255,7 +255,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasIndex("ProgramId");
 
-                    b.ToTable("CalendarEvents");
+                    b.ToTable("CalendarEvents", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.CalendarTheme", b =>
@@ -310,7 +310,7 @@ namespace CRM.Persistence.Migrations
                     b.HasIndex("Month")
                         .IsUnique();
 
-                    b.ToTable("CalendarThemes");
+                    b.ToTable("CalendarThemes", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.ChecklistTemplateItem", b =>
@@ -340,7 +340,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ChecklistTemplateItems");
+                    b.ToTable("ChecklistTemplateItems", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.CrmProgram", b =>
@@ -392,7 +392,7 @@ namespace CRM.Persistence.Migrations
                     b.HasIndex("Slug")
                         .IsUnique();
 
-                    b.ToTable("Programs");
+                    b.ToTable("Programs", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.DocumentRecord", b =>
@@ -425,7 +425,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasIndex("ParticipantId");
 
-                    b.ToTable("DocumentRecords");
+                    b.ToTable("DocumentRecords", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.EventAttendanceRecord", b =>
@@ -467,7 +467,7 @@ namespace CRM.Persistence.Migrations
                     b.HasIndex("EventSessionId", "ParticipantId")
                         .IsUnique();
 
-                    b.ToTable("EventAttendanceRecords");
+                    b.ToTable("EventAttendanceRecords", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.EventSession", b =>
@@ -526,7 +526,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasIndex("Date");
 
-                    b.ToTable("EventSessions");
+                    b.ToTable("EventSessions", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.EventSessionSite", b =>
@@ -604,7 +604,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasIndex("ProgramId");
 
-                    b.ToTable("Games");
+                    b.ToTable("Games", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.GameIdea", b =>
@@ -648,7 +648,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasIndex("TeacherSuggestedId");
 
-                    b.ToTable("GameIdeas");
+                    b.ToTable("GameIdeas", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.GameSubGoal", b =>
@@ -682,7 +682,7 @@ namespace CRM.Persistence.Migrations
                     b.HasIndex("GameId", "SubSkillId")
                         .IsUnique();
 
-                    b.ToTable("GameSubGoals");
+                    b.ToTable("GameSubGoals", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.GoalBankEntry", b =>
@@ -724,7 +724,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasIndex("Kind", "SectionNumber", "Level");
 
-                    b.ToTable("GoalBankEntries");
+                    b.ToTable("GoalBankEntries", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.KeyArtsDate", b =>
@@ -767,7 +767,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasIndex("Month", "SortOrder");
 
-                    b.ToTable("KeyArtsDates");
+                    b.ToTable("KeyArtsDates", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.MfaChallenge", b =>
@@ -809,7 +809,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasIndex("UserId", "ConsumedAt");
 
-                    b.ToTable("MfaChallenges");
+                    b.ToTable("MfaChallenges", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.MfaRecoveryCode", b =>
@@ -841,7 +841,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasIndex("UserId", "UsedAt");
 
-                    b.ToTable("MfaRecoveryCodes");
+                    b.ToTable("MfaRecoveryCodes", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.MonthlyProgressSnapshot", b =>
@@ -902,7 +902,7 @@ namespace CRM.Persistence.Migrations
                     b.HasIndex("ParticipantId", "SubSkillId", "MonthKey")
                         .IsUnique();
 
-                    b.ToTable("MonthlyProgressSnapshots");
+                    b.ToTable("MonthlyProgressSnapshots", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.MonthlySummary", b =>
@@ -944,7 +944,7 @@ namespace CRM.Persistence.Migrations
                     b.HasIndex("ParticipantId", "MonthKey")
                         .IsUnique();
 
-                    b.ToTable("MonthlySummaries");
+                    b.ToTable("MonthlySummaries", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.ObjectiveArea", b =>
@@ -993,7 +993,7 @@ namespace CRM.Persistence.Migrations
                     b.HasIndex("Slug")
                         .IsUnique();
 
-                    b.ToTable("ObjectiveAreas");
+                    b.ToTable("ObjectiveAreas", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.OnboardingItem", b =>
@@ -1037,7 +1037,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasIndex("StaffMemberId");
 
-                    b.ToTable("OnboardingItems");
+                    b.ToTable("OnboardingItems", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.Participant", b =>
@@ -1152,7 +1152,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasIndex("SecondaryProgramId");
 
-                    b.ToTable("Participants");
+                    b.ToTable("Participants", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.ParticipantArtsProfile", b =>
@@ -1187,7 +1187,7 @@ namespace CRM.Persistence.Migrations
                     b.HasIndex("ParticipantId")
                         .IsUnique();
 
-                    b.ToTable("ParticipantArtsProfiles");
+                    b.ToTable("ParticipantArtsProfiles", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.PerStarPlan", b =>
@@ -1245,7 +1245,7 @@ namespace CRM.Persistence.Migrations
                     b.HasIndex("ParticipantId", "MonthKey")
                         .IsUnique();
 
-                    b.ToTable("PerStarPlans");
+                    b.ToTable("PerStarPlans", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.Project", b =>
@@ -1282,7 +1282,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Projects");
+                    b.ToTable("Projects", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.ProjectTask", b =>
@@ -1332,7 +1332,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasIndex("ProjectId");
 
-                    b.ToTable("Tasks");
+                    b.ToTable("Tasks", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.RefreshToken", b =>
@@ -1368,7 +1368,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("RefreshTokens");
+                    b.ToTable("RefreshTokens", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.RosterAssignment", b =>
@@ -1419,7 +1419,7 @@ namespace CRM.Persistence.Migrations
                     b.HasIndex("ParticipantId", "Year", "Quarter")
                         .IsUnique();
 
-                    b.ToTable("RosterAssignments");
+                    b.ToTable("RosterAssignments", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.ScoreThreshold", b =>
@@ -1445,7 +1445,7 @@ namespace CRM.Persistence.Migrations
                     b.HasIndex("Level")
                         .IsUnique();
 
-                    b.ToTable("ScoreThresholds");
+                    b.ToTable("ScoreThresholds", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.Script", b =>
@@ -1496,7 +1496,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Scripts");
+                    b.ToTable("Scripts", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.ScriptProgram", b =>
@@ -1511,7 +1511,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasIndex("ProgramId");
 
-                    b.ToTable("ScriptPrograms");
+                    b.ToTable("ScriptPrograms", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.Session", b =>
@@ -1565,7 +1565,7 @@ namespace CRM.Persistence.Migrations
                     b.HasIndex("ProgramId", "Date")
                         .IsUnique();
 
-                    b.ToTable("Sessions");
+                    b.ToTable("Sessions", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.Site", b =>
@@ -1598,7 +1598,7 @@ namespace CRM.Persistence.Migrations
                     b.HasIndex("Slug")
                         .IsUnique();
 
-                    b.ToTable("Sites");
+                    b.ToTable("Sites", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.StaffMember", b =>
@@ -1640,7 +1640,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Staff");
+                    b.ToTable("Staff", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.StaffProgramAssignment", b =>
@@ -1655,7 +1655,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasIndex("ProgramId");
 
-                    b.ToTable("StaffProgramAssignments");
+                    b.ToTable("StaffProgramAssignments", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.StarGroup", b =>
@@ -1688,7 +1688,7 @@ namespace CRM.Persistence.Migrations
                     b.HasIndex("Slug")
                         .IsUnique();
 
-                    b.ToTable("StarGroups");
+                    b.ToTable("StarGroups", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.SubSkill", b =>
@@ -1732,7 +1732,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasIndex("ObjectiveAreaId", "SortOrder");
 
-                    b.ToTable("SubSkills");
+                    b.ToTable("SubSkills", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.User", b =>
@@ -1820,7 +1820,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasIndex("StaffMemberId");
 
-                    b.ToTable("Users");
+                    b.ToTable("Users", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.Volunteer", b =>
@@ -1870,7 +1870,7 @@ namespace CRM.Persistence.Migrations
 
                     b.HasIndex("ProgramId");
 
-                    b.ToTable("Volunteers");
+                    b.ToTable("Volunteers", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.WeeklyDataEntry", b =>
@@ -1925,7 +1925,7 @@ namespace CRM.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_WeeklyDataEntries_Participant_SubSkill_Month_Week");
 
-                    b.ToTable("WeeklyDataEntries");
+                    b.ToTable("WeeklyDataEntries", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.WeeklyFocusSkill", b =>
@@ -1961,7 +1961,7 @@ namespace CRM.Persistence.Migrations
                     b.HasIndex("ProgramId", "MonthKey", "WeekNumber", "SubSkillId")
                         .IsUnique();
 
-                    b.ToTable("WeeklyFocusSkills");
+                    b.ToTable("WeeklyFocusSkills", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.WeeklyNoteSelection", b =>
@@ -2004,7 +2004,7 @@ namespace CRM.Persistence.Migrations
                     b.HasIndex("ParticipantId", "MonthKey", "WeekNumber", "Kind")
                         .IsUnique();
 
-                    b.ToTable("WeeklyNoteSelections");
+                    b.ToTable("WeeklyNoteSelections", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.AgeModification", b =>

@@ -6,15 +6,14 @@
     }
   },
   "AllowedHosts": "*",
-
   "_comment_ConnectionStrings": [
-    "Do NOT put a connection string here (#3) — this file is a template and its sibling",
+    "Do NOT put a connection string here (#3) \u2014 this file is a template and its sibling",
     "appsettings.json is gitignored precisely because credentials leak that way.",
     "",
-    "Local development — store it in .NET User Secrets, outside the repo tree:",
+    "Local development \u2014 store it in .NET User Secrets, outside the repo tree:",
     "  dotnet user-secrets set \"ConnectionStrings:DefaultConnection\" \"Server=tcp:<server>.database.windows.net,1433;Initial Catalog=<db>;User ID=<user>;Password=<pass>;Encrypt=True;\" --project CRM.API",
     "",
-    "Azure — set the App Service connection string (or the application setting",
+    "Azure \u2014 set the App Service connection string (or the application setting",
     "ConnectionStrings__DefaultConnection). Better still, use a Managed Identity so there",
     "is no password to rotate at all."
   ],
@@ -25,19 +24,18 @@
     ]
   },
   "Jwt": {
-    "Key": "<32+ character signing secret — set via the Jwt__Key env var / Azure app setting, never commit a real value>",
+    "Key": "<32+ character signing secret \u2014 set via the Jwt__Key env var / Azure app setting, never commit a real value>",
     "Issuer": "ShinyStarCRM",
     "Audience": "ShinyStarCRM",
     "ExpiryMinutes": 480
   },
-
   "_comment_Mfa": [
     "EncryptionKey encrypts every enrolled user's TOTP secret at rest (AES-256-GCM). It must",
     "be base64 that decodes to EXACTLY 32 bytes: `openssl rand -base64 32`. Azure: set the",
     "application setting Mfa__EncryptionKey. Never commit a real value.",
     "",
     "THERE IS NO KEY ROTATION. Lose or change this key and every enrolled secret becomes",
-    "undecryptable — the whole team falls back to recovery codes, then to admin resets. The",
+    "undecryptable \u2014 the whole team falls back to recovery codes, then to admin resets. The",
     "stored blob carries a version byte so rotation could be added later; it has not been.",
     "",
     "The development placeholder is publicly known, so dev TOTP secrets are encrypted under a",
@@ -57,18 +55,17 @@
     "    WHERE Email = '<address>';",
     "  DELETE FROM MfaRecoveryCodes WHERE UserId = (SELECT Id FROM Users WHERE Email = '<address>');",
     "The audit log records the consequences (the re-enrollment that follows) but NOT the DB",
-    "edit itself — that is a real limitation, not an oversight."
+    "edit itself \u2014 that is a real limitation, not an oversight."
   ],
   "Mfa": {
-    "EncryptionKey": "<base64 of 32 random bytes — set via the Mfa__EncryptionKey env var / Azure app setting, never commit a real value>",
+    "EncryptionKey": "<base64 of 32 random bytes \u2014 set via the Mfa__EncryptionKey env var / Azure app setting, never commit a real value>",
     "Required": true,
     "Issuer": "Shining Stars CRM"
   },
-
   "_comment_ForwardedHeaders": [
     "The frontend proxies every API call through its own origin, so the address this API",
     "sees is the proxy's, not the client's. List the proxy's outbound IP address(es) here to",
-    "have X-Forwarded-For trusted from them — audit rows and the login rate limiter then see",
+    "have X-Forwarded-For trusted from them \u2014 audit rows and the login rate limiter then see",
     "the real client. Azure: ForwardedHeaders__KnownProxies__0, __1, ...",
     "",
     "Empty is the safe default and is what production should keep until the API is network-",
@@ -84,9 +81,24 @@
     "is shared by the whole organisation rather than being per-client, and staff can throttle",
     "each other while an attacker calling this API directly sits in a partition of their own.",
     "",
-    "Not a secret — no startup guard, unlike Jwt:Key."
+    "Not a secret \u2014 no startup guard, unlike Jwt:Key."
   ],
   "ForwardedHeaders": {
     "KnownProxies": []
+  },
+  "_comment_Database": [
+    "MigrateOnStartup controls whether the app applies pending EF migrations when it boots.",
+    "It defaults to TRUE in Development and FALSE everywhere else, so a production restart can",
+    "never alter the schema on its own. Leave it unset in Azure App Service.",
+    "",
+    "Deploy order is therefore: run `dotnet ef database update --project CRM.Persistence",
+    "--startup-project CRM.API` against the target database FIRST, then deploy the app. If you",
+    "deploy first, the app refuses to start and names the pending migrations rather than",
+    "half-migrating anything.",
+    "",
+    "Set Database__MigrateOnStartup=true only if you deliberately want boot-time migration back."
+  ],
+  "Database": {
+    "MigrateOnStartup": false
   }
 }

@@ -419,13 +419,35 @@ if (app.Environment.IsDevelopment())
 // takes the app down at boot instead of failing a deployment step, so this is now
 // switchable: run `dotnet ef database update --project CRM.Persistence --startup-project
 // CRM.API` from your release pipeline and set Database:MigrateOnStartup to false
-// (Azure App Service setting: Database__MigrateOnStartup). Defaults to true so existing
-// deploys keep working untouched.
-var migrateOnStartup = builder.Configuration.GetValue("Database:MigrateOnStartup", true);
+// (Azure App Service setting: Database__MigrateOnStartup).
+//
+// DEFAULTS BY ENVIRONMENT, deliberately asymmetric. Development defaults to true, because a
+// developer pulling a branch wants the schema to follow it. Everything else defaults to
+// FALSE: outside development a restart must never be able to alter the schema, and the
+// failure mode of getting that wrong is a boot loop against a half-migrated database with
+// the client's records in it. The else-branch below turns a missing migration into a loud
+// startup error naming the exact command to run, which is the behaviour you want at deploy
+// time — fail the release, not the data.
+var migrateOnStartup = builder.Configuration.GetValue(
+    "Database:MigrateOnStartup", builder.Environment.IsDevelopment());
+
+// `dotnet ef` resolves the DbContext by executing this file up to app.Run(), so without this
+// guard EVERY `migrations add`, `migrations list` or `database update --dry-run` would also
+// migrate whatever database the connection string happens to point at. That is not
+// hypothetical: it is how AddEventAttendance reached the shared database before anyone had
+// chosen to apply it. EF Core's design-time host runs under an entry assembly named "ef".
+var isDesignTime = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name == "ef";
 
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    if (isDesignTime)
+    {
+        // Scaffolding a migration must not apply one. Nothing else in this block should run
+        // at design time either — the seeders below would write to the live database.
+        return;
+    }
 
     if (migrateOnStartup)
     {
