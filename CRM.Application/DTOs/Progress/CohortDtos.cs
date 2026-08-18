@@ -1,5 +1,18 @@
 namespace CRM.Application.DTOs.Progress;
 
+/// <summary>
+/// One Star behind a roll-up count. Returned on demand rather than inlined into every row:
+/// with ~48 active skills and a full cohort, embedding names in the roll-up would multiply
+/// its payload by two orders of magnitude for a detail most readers never open.
+/// </summary>
+public class CohortStarDto
+{
+    public Guid ParticipantId { get; set; }
+    public string FullName { get; set; } = string.Empty;
+    public string Initials { get; set; } = string.Empty;
+    public string ProgramName { get; set; } = string.Empty;
+}
+
 /// <summary>One sub-skill's level distribution across the cohort for a month.</summary>
 public class CohortRollUpRowDto
 {

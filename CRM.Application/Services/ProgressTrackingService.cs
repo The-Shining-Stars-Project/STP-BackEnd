@@ -106,8 +106,69 @@ public class ProgressTrackingService : IProgressTrackingService
             await _uow.WeeklyDataEntries.UpdateAsync(existing);
         }
 
+        // Recompute this skill's month-end snapshot in the same save, so the Month-end
+        // level is filled in the moment a score lands instead of waiting for someone to
+        // find the "Recompute" button. Only the affected skill is touched — recomputing
+        // the whole roster's snapshots on every keystroke would be wasted writes — and a
+        // level a teacher has already confirmed is never overwritten.
+        var snap = await RecomputeSkillSnapshotAsync(dto.ParticipantId, dto.SubSkillId, dto.MonthKey, existing);
+
         await _uow.SaveChangesAsync();
-        return ToEntryDto(existing);
+
+        var result = ToEntryDto(existing);
+        result.Snapshot = ToSnapshotDto(snap, await SubSkillMapAsync());
+        return result;
+    }
+
+    /// <summary>
+    /// Refreshes the MonthlyProgressSnapshot for one (participant, skill, month) from its
+    /// weekly entries. <paramref name="justWritten"/> is the entry the caller has staged but
+    /// not yet saved — a database query cannot see it, so it is merged in by hand.
+    /// Does not save; the caller owns the transaction.
+    /// </summary>
+    private async Task<MonthlyProgressSnapshot> RecomputeSkillSnapshotAsync(
+        Guid participantId, Guid subSkillId, string monthKey, WeeklyDataEntry justWritten)
+    {
+        var monthEntries = await _uow.WeeklyDataEntries.ListAsync(e =>
+            e.ParticipantId == participantId && e.SubSkillId == subSkillId && e.MonthKey == monthKey);
+        var scores = monthEntries
+            .Where(e => e.Id != justWritten.Id)
+            .Select(e => e.Score)
+            .Append(justWritten.Score);
+
+        var thresholds = (await _uow.ScoreThresholds.GetAllAsync())
+            .Select(t => (t.Level, t.MinAverage)).ToList();
+        var r = ProgressLevelCalculator.Derive(scores, thresholds);
+
+        var snap = (await _uow.MonthlyProgressSnapshots.ListAsync(s =>
+            s.ParticipantId == participantId && s.SubSkillId == subSkillId && s.MonthKey == monthKey))
+            .FirstOrDefault();
+
+        if (snap is null)
+        {
+            snap = new MonthlyProgressSnapshot
+            {
+                ParticipantId = participantId,
+                SubSkillId = subSkillId,
+                MonthKey = monthKey,
+                SuggestedLevel = r.Level,
+                Level = r.Level,
+                SummedScore = r.SummedScore,
+                ScoredWeekCount = r.ScoredWeekCount,
+                IsConfirmed = false,
+            };
+            await _uow.MonthlyProgressSnapshots.AddAsync(snap);
+        }
+        else
+        {
+            snap.SuggestedLevel = r.Level;
+            snap.SummedScore = r.SummedScore;
+            snap.ScoredWeekCount = r.ScoredWeekCount;
+            if (!snap.IsConfirmed) snap.Level = r.Level; // same rule as ComputeMonthEndAsync
+            await _uow.MonthlyProgressSnapshots.UpdateAsync(snap);
+        }
+
+        return snap;
     }
 
     public async Task<StarMonthDto?> GetStarMonthAsync(Guid currentUserId, Guid participantId, string monthKey)

@@ -71,7 +71,8 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
 
     public IRepository<Volunteer> Volunteers { get; } = new FakeRepository<Volunteer>();
     public IRepository<ObjectiveArea> ObjectiveAreas { get; } = new FakeRepository<ObjectiveArea>();
-    public IRepository<SubSkill> SubSkills { get; } = new FakeRepository<SubSkill>();
+    public FakeRepository<SubSkill> SubSkillsRepo { get; } = new();
+    public IRepository<SubSkill> SubSkills => SubSkillsRepo;
     public IRepository<Game> Games { get; } = new FakeRepository<Game>();
     public IRepository<GameSubGoal> GameSubGoals { get; } = new FakeRepository<GameSubGoal>();
     public IRepository<Site> Sites { get; } = new FakeRepository<Site>();
@@ -79,9 +80,11 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
     public IRepository<RosterAssignment> RosterAssignments { get; } = new FakeRepository<RosterAssignment>();
     public IRepository<ParticipantArtsProfile> ParticipantArtsProfiles { get; } = new FakeRepository<ParticipantArtsProfile>();
     public IRepository<WeeklyDataEntry> WeeklyDataEntries { get; } = new FakeRepository<WeeklyDataEntry>();
-    public IRepository<MonthlyProgressSnapshot> MonthlyProgressSnapshots { get; } = new FakeRepository<MonthlyProgressSnapshot>();
+    public FakeRepository<MonthlyProgressSnapshot> MonthlyProgressSnapshotsRepo { get; } = new();
+    public IRepository<MonthlyProgressSnapshot> MonthlyProgressSnapshots => MonthlyProgressSnapshotsRepo;
     public IRepository<WeeklyFocusSkill> WeeklyFocusSkills { get; } = new FakeRepository<WeeklyFocusSkill>();
-    public IRepository<ScoreThreshold> ScoreThresholds { get; } = new FakeRepository<ScoreThreshold>();
+    public FakeRepository<ScoreThreshold> ScoreThresholdsRepo { get; } = new();
+    public IRepository<ScoreThreshold> ScoreThresholds => ScoreThresholdsRepo;
     public IRepository<GoalBankEntry> GoalBankEntries { get; } = new FakeRepository<GoalBankEntry>();
     public IRepository<WeeklyNoteSelection> WeeklyNoteSelections { get; } = new FakeRepository<WeeklyNoteSelection>();
     public IRepository<MonthlySummary> MonthlySummaries { get; } = new FakeRepository<MonthlySummary>();

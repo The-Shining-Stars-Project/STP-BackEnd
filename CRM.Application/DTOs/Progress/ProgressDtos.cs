@@ -13,6 +13,13 @@ public class WeeklyDataEntryDto
     public string WeekDate { get; set; } = string.Empty;
     public DataScore Score { get; set; }
     public Guid? RecordedByStaffMemberId { get; set; }
+
+    /// <summary>
+    /// The month-end snapshot for this skill, refreshed by the same save. Returned so the
+    /// tracker can update its Month-end column without a follow-up GET — a refetch would
+    /// write a progress.star.view audit row for every score keystroke.
+    /// </summary>
+    public MonthlyProgressSnapshotDto? Snapshot { get; set; }
 }
 
 public class RecordWeeklyScoreDto

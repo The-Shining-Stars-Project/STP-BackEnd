@@ -134,7 +134,7 @@ public class ProgramService : IProgramService
                 ProgramName = program.Name,
                 AttendancePct = pctMap.GetValueOrDefault(p.Id, 0),
                 StartDate = p.StartDate.ToString("yyyy-MM-dd"),
-                HasDocAlerts = false,
+                HasDocAlerts = DocumentAlerts.For(p),
             }).ToList(),
             UpcomingEvents = events.Select(e => new CalendarEventDto
             {
