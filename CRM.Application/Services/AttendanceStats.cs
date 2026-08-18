@@ -4,6 +4,12 @@ using CRM.Domain.Enums;
 namespace CRM.Application.Services;
 
 /// <summary>
+/// CLASS attendance only. Production and event attendance lives in EventAttendanceRecord and
+/// is tracked separately at the client's request (Aug 2026) — a Star missing an optional
+/// performance must not move the percentage that measures their class participation. The two
+/// are different CLR types precisely so they cannot be summed here by accident; if you find
+/// yourself wanting to widen these signatures to accept both, that is the design saying no.
+///
 /// Computes real attendance percentages from <see cref="AttendanceRecord"/>s (#8).
 /// The denormalized <c>Participant.AttendancePct</c> column was only ever written by the
 /// dev seeder and is never recomputed, so it must not be used for display — it reads 0 for

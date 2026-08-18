@@ -31,6 +31,8 @@ public interface IUnitOfWork
     IRepository<CalendarTheme> CalendarThemes { get; }
     IRepository<KeyArtsDate> KeyArtsDates { get; }
     IRepository<AttendanceRecord> Attendance { get; }
+    IRepository<EventSession> EventSessions { get; }
+    IRepository<EventAttendanceRecord> EventAttendanceRecords { get; }
     IRepository<AttendanceNote> AttendanceNotes { get; }
     IRepository<Session> Sessions { get; }
     IRepository<CalendarEvent> CalendarEvents { get; }
@@ -61,6 +63,11 @@ public interface IUnitOfWork
 
     // ScriptProgram is a join entity with a composite PK (no BaseEntity), so it is
     // managed via dedicated methods rather than a generic repository.
+    // EventSessionSite has a composite PK and no BaseEntity, so it is managed through
+    // dedicated methods rather than a generic repository — the ScriptProgram pattern.
+    Task<IReadOnlyList<EventSessionSite>> GetEventSessionSitesAsync(Guid eventSessionId);
+    Task ReplaceEventSessionSitesAsync(Guid eventSessionId, IReadOnlyCollection<Guid> siteIds);
+
     Task<IReadOnlyList<ScriptProgram>> GetScriptProgramsAsync();
     Task ReplaceScriptProgramsAsync(Guid scriptId, IReadOnlyCollection<Guid> programIds);
 

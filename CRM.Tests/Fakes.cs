@@ -75,7 +75,8 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
     public IRepository<SubSkill> SubSkills => SubSkillsRepo;
     public IRepository<Game> Games { get; } = new FakeRepository<Game>();
     public IRepository<GameSubGoal> GameSubGoals { get; } = new FakeRepository<GameSubGoal>();
-    public IRepository<Site> Sites { get; } = new FakeRepository<Site>();
+    public FakeRepository<Site> SitesRepo { get; } = new();
+    public IRepository<Site> Sites => SitesRepo;
     public IRepository<StarGroup> StarGroups { get; } = new FakeRepository<StarGroup>();
     public IRepository<RosterAssignment> RosterAssignments { get; } = new FakeRepository<RosterAssignment>();
     public IRepository<ParticipantArtsProfile> ParticipantArtsProfiles { get; } = new FakeRepository<ParticipantArtsProfile>();
@@ -92,7 +93,12 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
     public IRepository<AgeModification> AgeModifications { get; } = new FakeRepository<AgeModification>();
     public IRepository<CalendarTheme> CalendarThemes { get; } = new FakeRepository<CalendarTheme>();
     public IRepository<KeyArtsDate> KeyArtsDates { get; } = new FakeRepository<KeyArtsDate>();
-    public IRepository<AttendanceRecord> Attendance { get; } = new FakeRepository<AttendanceRecord>();
+    public FakeRepository<AttendanceRecord> AttendanceRepo { get; } = new();
+    public IRepository<AttendanceRecord> Attendance => AttendanceRepo;
+    public FakeRepository<EventSession> EventSessionsRepo { get; } = new();
+    public IRepository<EventSession> EventSessions => EventSessionsRepo;
+    public FakeRepository<EventAttendanceRecord> EventAttendanceRecordsRepo { get; } = new();
+    public IRepository<EventAttendanceRecord> EventAttendanceRecords => EventAttendanceRecordsRepo;
     public IRepository<AttendanceNote> AttendanceNotes { get; } = new FakeRepository<AttendanceNote>();
     public IRepository<Session> Sessions { get; } = new FakeRepository<Session>();
     public IRepository<CalendarEvent> CalendarEvents { get; } = new FakeRepository<CalendarEvent>();
@@ -121,6 +127,21 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
         Task.FromResult<IReadOnlyList<ScriptProgram>>(new List<ScriptProgram>());
 
     public Task ReplaceScriptProgramsAsync(Guid scriptId, IReadOnlyCollection<Guid> programIds) => Task.CompletedTask;
+
+    /// <summary>Event site pairings, in memory. Composite PK, so no generic repository.</summary>
+    public List<EventSessionSite> EventSessionSites { get; } = new();
+
+    public Task<IReadOnlyList<EventSessionSite>> GetEventSessionSitesAsync(Guid eventSessionId) =>
+        Task.FromResult<IReadOnlyList<EventSessionSite>>(
+            EventSessionSites.Where(s => s.EventSessionId == eventSessionId).ToList());
+
+    public Task ReplaceEventSessionSitesAsync(Guid eventSessionId, IReadOnlyCollection<Guid> siteIds)
+    {
+        EventSessionSites.RemoveAll(s => s.EventSessionId == eventSessionId);
+        foreach (var siteId in siteIds.Distinct())
+            EventSessionSites.Add(new EventSessionSite { EventSessionId = eventSessionId, SiteId = siteId });
+        return Task.CompletedTask;
+    }
 
     /// <summary>
     /// Set to make the next (and every subsequent) SaveChangesAsync throw this, standing in for

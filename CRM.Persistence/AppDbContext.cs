@@ -34,6 +34,8 @@ public class AppDbContext : DbContext
     public DbSet<StaffProgramAssignment> StaffProgramAssignments { get; set; }
     public DbSet<Session> Sessions { get; set; }
     public DbSet<AttendanceRecord> AttendanceRecords { get; set; }
+    public DbSet<EventSession> EventSessions { get; set; }
+    public DbSet<EventAttendanceRecord> EventAttendanceRecords { get; set; }
     public DbSet<AttendanceNote> AttendanceNotes { get; set; }
     public DbSet<CalendarEvent> CalendarEvents { get; set; }
     public DbSet<Project> Projects { get; set; }

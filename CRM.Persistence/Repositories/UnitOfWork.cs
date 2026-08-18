@@ -36,6 +36,8 @@ public class UnitOfWork : IUnitOfWork
         CalendarThemes = new GenericRepository<CalendarTheme>(db);
         KeyArtsDates = new GenericRepository<KeyArtsDate>(db);
         Attendance = new GenericRepository<AttendanceRecord>(db);
+        EventSessions = new GenericRepository<EventSession>(db);
+        EventAttendanceRecords = new GenericRepository<EventAttendanceRecord>(db);
         AttendanceNotes = new GenericRepository<AttendanceNote>(db);
         Sessions = new GenericRepository<Session>(db);
         CalendarEvents = new GenericRepository<CalendarEvent>(db);
@@ -75,6 +77,8 @@ public class UnitOfWork : IUnitOfWork
     public IRepository<CalendarTheme> CalendarThemes { get; }
     public IRepository<KeyArtsDate> KeyArtsDates { get; }
     public IRepository<AttendanceRecord> Attendance { get; }
+    public IRepository<EventSession> EventSessions { get; }
+    public IRepository<EventAttendanceRecord> EventAttendanceRecords { get; }
     public IRepository<AttendanceNote> AttendanceNotes { get; }
     public IRepository<Session> Sessions { get; }
     public IRepository<CalendarEvent> CalendarEvents { get; }
@@ -99,6 +103,23 @@ public class UnitOfWork : IUnitOfWork
         var existing = await _db.Set<StaffProgramAssignment>()
             .FirstOrDefaultAsync(a => a.StaffMemberId == staffMemberId && a.ProgramId == programId);
         if (existing is not null) _db.Set<StaffProgramAssignment>().Remove(existing);
+    }
+
+    public async Task<IReadOnlyList<EventSessionSite>> GetEventSessionSitesAsync(Guid eventSessionId) =>
+        await _db.Set<EventSessionSite>().AsNoTracking()
+            .Where(s => s.EventSessionId == eventSessionId).ToListAsync();
+
+    public async Task ReplaceEventSessionSitesAsync(Guid eventSessionId, IReadOnlyCollection<Guid> siteIds)
+    {
+        var existing = await _db.Set<EventSessionSite>()
+            .Where(s => s.EventSessionId == eventSessionId).ToListAsync();
+        _db.Set<EventSessionSite>().RemoveRange(existing);
+
+        // Ignore ids that are not real sites, the same way ReplaceScriptProgramsAsync does —
+        // a stale id from a client should not fail the whole save.
+        var valid = await _db.Set<Site>().Where(s => siteIds.Contains(s.Id)).Select(s => s.Id).ToListAsync();
+        foreach (var siteId in valid.Distinct())
+            _db.Set<EventSessionSite>().Add(new EventSessionSite { EventSessionId = eventSessionId, SiteId = siteId });
     }
 
     public async Task<IReadOnlyList<ScriptProgram>> GetScriptProgramsAsync() =>
