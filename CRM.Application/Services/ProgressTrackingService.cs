@@ -182,6 +182,13 @@ public class ProgressTrackingService : IProgressTrackingService
         var skills = await SubSkillMapAsync();
         var bankText = await GoalBankTextMapAsync();
 
+        // Overall level for the month: every weekly score the Star received, pooled across
+        // skills and averaged once. Derive already excludes N/A, so a skill marked
+        // not-applicable does not drag the average down.
+        var thresholds = (await _uow.ScoreThresholds.GetAllAsync())
+            .Select(t => (t.Level, t.MinAverage)).ToList();
+        var overall = ProgressLevelCalculator.Derive(entries.Select(e => e.Score), thresholds);
+
         return new StarMonthDto
         {
             ParticipantId = participantId,
@@ -200,6 +207,8 @@ public class ProgressTrackingService : IProgressTrackingService
                 .Select(n => ToNoteDto(n, bankText))
                 .ToList(),
             MonthlySummary = summary is null ? null : ToSummaryDto(summary),
+            SuggestedPrimaryLevel = overall.Level,
+            SuggestedPrimaryScoredCount = overall.ScoredWeekCount,
         };
     }
 

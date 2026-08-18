@@ -84,6 +84,21 @@ public class StarMonthDto
     public List<MonthlyProgressSnapshotDto> Snapshots { get; set; } = new();
     public List<WeeklyNoteSelectionDto> NoteSelections { get; set; } = new();
     public MonthlySummaryDto? MonthlySummary { get; set; }
+
+    /// <summary>
+    /// The Star's overall level for the month — the average of EVERY weekly score they were
+    /// given, pooled across all skills, not the average of the per-skill levels. The client
+    /// asked for "the average overall monthly level across all their scores", and pooling the
+    /// raw scores is the reading that matches: averaging levels would weight a skill scored
+    /// once the same as one scored four times.
+    ///
+    /// A suggestion for MonthlySummary.PrimaryLevel, never a substitute for it — the same
+    /// suggest-then-confirm split the per-skill levels use.
+    /// </summary>
+    public ProgressLevel SuggestedPrimaryLevel { get; set; }
+
+    /// <summary>How many weekly scores fed the suggestion. Zero means there is nothing to suggest.</summary>
+    public int SuggestedPrimaryScoredCount { get; set; }
 }
 
 // ── Goal bank + Section-6 notes + monthly summary ─────────────────────────────
