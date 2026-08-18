@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    ONE-OFF MIGRATION TOOL. Deliberately OUTSIDE CRM.sln.
+
+    The deploy workflow runs `dotnet publish -c Release` with no project argument, which
+    publishes the solution. A second executable inside the solution would land in the same
+    output folder and fight CRM.API for it. Keeping this out of the .sln means CI never
+    builds it, the deploy cannot ship it, and `dotnet test` never sees it.
+
+    Run it explicitly (see Program.cs for the exact argument syntax):
+      dotnet run, targeting this project, passing a csv path and a connection string.
+
+    Delete this folder once the migration is done.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>CRM.DataLoader</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\CRM.Application\CRM.Application.csproj" />
+    <ProjectReference Include="..\..\CRM.Persistence\CRM.Persistence.csproj" />
+  </ItemGroup>
+
+</Project>
