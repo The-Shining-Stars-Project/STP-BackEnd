@@ -1,5 +1,6 @@
 using CRM.Application.Auth;
 using CRM.Application.DTOs.Audit;
+using CRM.Application.Exceptions;
 using CRM.Application.DTOs.Auth;
 using CRM.Application.Interfaces;
 using CRM.Application.Interfaces.Services;
@@ -1190,7 +1191,7 @@ public class AuthService : IAuthService
                 Summary = $"Rejected new user {email}: address already in use",
                 Metadata = Json(new { email, reason = "duplicate email" }),
             });
-            throw new InvalidOperationException($"A user with email '{email}' already exists.");
+            throw new DuplicateEmailException(email);
         }
 
         var (hash, salt) = _hasher.HashPassword(dto.Password);

@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using CRM.API.Filters;
 using CRM.Application.DTOs.Auth;
+using CRM.Application.Exceptions;
 using CRM.Application.Interfaces.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -241,9 +242,17 @@ public class AuthController : ControllerBase
             var created = await _service.RegisterAsync(dto);
             return CreatedAtAction(nameof(Me), new { }, created);
         }
+        catch (DuplicateEmailException ex)
+        {
+            // 409 belongs to the one case it describes: the address is taken.
+            return Conflict(new { message = ex.Message });
+        }
         catch (InvalidOperationException ex)
         {
-            return Conflict(new { message = ex.Message });
+            // Everything else RegisterAsync rejects is a bad field, not a collision —
+            // a password under 8 characters, or without a letter and a digit. Returning
+            // 409 for those made the users screen blame the email address instead.
+            return BadRequest(new { message = ex.Message });
         }
     }
 

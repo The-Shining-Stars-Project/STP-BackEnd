@@ -1,5 +1,6 @@
 using CRM.Application.DTOs.Audit;
 using CRM.Application.DTOs.Auth;
+using CRM.Application.Exceptions;
 using CRM.Application.Services;
 using CRM.Domain.Entities;
 using CRM.Domain.Enums;
@@ -452,7 +453,9 @@ public class AuthServiceAuditTests
     [Fact]
     public async Task Creating_a_user_on_an_address_that_already_exists_is_audited()
     {
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        // DuplicateEmailException, not the base type: the controller keys the 409 off it,
+        // and everything else RegisterAsync rejects is a 400.
+        await Assert.ThrowsAsync<DuplicateEmailException>(() =>
             _service.RegisterAsync(new RegisterUserDto
             {
                 Email = "TEACHER@example.org", FullName = "Impostor", Password = "N3wPassword!", Role = UserRole.Admin,
