@@ -90,10 +90,14 @@ public class AttendanceService : IAttendanceService
         if (programs.Count == 0) return new List<ScheduledSessionDto>();
         var allowed = programs.Select(p => p.Id).ToHashSet();
 
-        // Attendance is tracked for Active and Needs-Attention stars (client rule). A star
-        // counts toward every program they're enrolled in — primary or secondary (PT+Pathways).
+        // Attendance is tracked for Active, Needs-Attention, and Auth-Pending stars (client
+        // rule — auth-pending stars already attend while their authorization is processed).
+        // A star counts toward every program they're enrolled in — primary or secondary
+        // (PT+Pathways).
         var attendanceEligible = (await _uow.Participants.ListAsync(
-                p => p.Status == ParticipantStatus.Active || p.Status == ParticipantStatus.Attention)).ToList();
+                p => p.Status == ParticipantStatus.Active
+                     || p.Status == ParticipantStatus.Attention
+                     || p.Status == ParticipantStatus.AuthPending)).ToList();
         var activeByProgram = allowed.ToDictionary(
             id => id,
             id => attendanceEligible.Count(p => p.ProgramId == id || p.SecondaryProgramId == id));
@@ -172,7 +176,9 @@ public class AttendanceService : IAttendanceService
 
         var participants = await _uow.Participants.ListAsync(
             p => (p.ProgramId == programId || p.SecondaryProgramId == programId)
-                 && (p.Status == ParticipantStatus.Active || p.Status == ParticipantStatus.Attention));
+                 && (p.Status == ParticipantStatus.Active
+                     || p.Status == ParticipantStatus.Attention
+                     || p.Status == ParticipantStatus.AuthPending));
 
         var recordByParticipant = (await _uow.Attendance.ListAsync(r => r.SessionId == session.Id))
             .GroupBy(r => r.ParticipantId)
@@ -215,7 +221,9 @@ public class AttendanceService : IAttendanceService
 
         var participants = await _uow.Participants.ListAsync(
             p => (p.ProgramId == programId || p.SecondaryProgramId == programId)
-                 && (p.Status == ParticipantStatus.Active || p.Status == ParticipantStatus.Attention));
+                 && (p.Status == ParticipantStatus.Active
+                     || p.Status == ParticipantStatus.Attention
+                     || p.Status == ParticipantStatus.AuthPending));
 
         var recordByParticipant = (await _uow.Attendance.ListAsync(r => r.SessionId == session.Id))
             .GroupBy(r => r.ParticipantId)
