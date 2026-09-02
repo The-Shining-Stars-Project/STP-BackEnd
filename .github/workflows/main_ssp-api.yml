@@ -31,8 +31,11 @@ jobs:
       - name: Test
         run: dotnet test --configuration Release --no-build --verbosity normal
 
+      # Publish ONLY the API project: a solution-level publish dumps every project's
+      # DLLs into one folder, and the Linux container's app detection can't pick an
+      # entry point from that pile - it falls back to the placeholder site.
       - name: dotnet publish
-        run: dotnet publish -c Release -o ${{env.DOTNET_ROOT}}/myapp
+        run: dotnet publish CRM.API/CRM.API.csproj -c Release -o ${{env.DOTNET_ROOT}}/myapp
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
