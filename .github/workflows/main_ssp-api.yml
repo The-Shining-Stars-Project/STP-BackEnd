@@ -26,6 +26,11 @@ jobs:
       - name: Build with dotnet
         run: dotnet build --configuration Release
 
+      # Gate the deploy on the full test suite: this job feeds `deploy` via `needs`,
+      # so a failure here stops the release instead of shipping it.
+      - name: Test
+        run: dotnet test --configuration Release --no-build --verbosity normal
+
       - name: dotnet publish
         run: dotnet publish -c Release -o ${{env.DOTNET_ROOT}}/myapp
 
