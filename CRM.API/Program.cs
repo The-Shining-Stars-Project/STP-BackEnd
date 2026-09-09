@@ -399,6 +399,18 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 // ---------------------------------------------------------
+// File storage (Azure Blob) — optional, unlike Jwt:Key, so the API can boot before the
+// storage account exists. But a deployment that is missing it should say so once, here at
+// startup, rather than only when the first PDF upload comes back 503. Resolving the service
+// now also means a malformed BlobStorage:AccountUrl fails the boot loudly instead of the
+// first upload.
+// ---------------------------------------------------------
+if (!app.Services.GetRequiredService<IFileStorage>().IsConfigured)
+    app.Logger.LogWarning(
+        "BlobStorage is not configured (no BlobStorage:AccountUrl or BlobStorage:ConnectionString). "
+        + "Script PDF uploads will answer 503 until it is set — see appsettings.json.template.");
+
+// ---------------------------------------------------------
 // Middleware pipeline
 // ---------------------------------------------------------
 if (app.Environment.IsDevelopment())

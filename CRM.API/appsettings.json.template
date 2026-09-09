@@ -100,5 +100,27 @@
   ],
   "Database": {
     "MigrateOnStartup": false
+  },
+  "_comment_BlobStorage": [
+    "Script PDFs live in Azure Blob Storage, not in the database. Leave both credentials empty",
+    "and the API still starts \u2014 PDF uploads answer 503 'not configured' until one is set.",
+    "",
+    "AccountUrl (preferred): https://<account>.blob.core.windows.net. The API signs in with its",
+    "App Service managed identity (DefaultAzureCredential), which needs the Storage Blob Data",
+    "Contributor role on the storage account \u2014 nothing secret to store or rotate. Azure",
+    "application setting: BlobStorage__AccountUrl.",
+    "",
+    "ConnectionString (alternative): the account's full connection string. It embeds the",
+    "account key, so it is a secret \u2014 Azure app setting BlobStorage__ConnectionString or local",
+    "user secrets only, never this file. Wins over AccountUrl when both are set, so a developer",
+    "can point local runs at Azurite (UseDevelopmentStorage=true) without touching the deployed",
+    "configuration.",
+    "",
+    "ContainerName defaults to crm-files and is created on first upload if it does not exist."
+  ],
+  "BlobStorage": {
+    "AccountUrl": "<https://<account>.blob.core.windows.net \u2014 or leave empty and set BlobStorage__AccountUrl in Azure>",
+    "ConnectionString": "",
+    "ContainerName": "crm-files"
   }
 }

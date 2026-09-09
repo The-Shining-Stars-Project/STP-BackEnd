@@ -17,7 +17,21 @@ public class ScriptDto
     public string? Duration { get; set; }
     public string? LastUsed { get; set; }
     public List<string> ProgramNames { get; set; } = new();
+
+    // The attached PDF, described but never embedded: the bytes come from
+    // GET /api/scripts/{id}/pdf. The blob name stays server-side — it is a storage key, not
+    // something a client needs or should build URLs from.
+    public bool HasPdf { get; set; }
+    public string? PdfFileName { get; set; }
+    public long? PdfSizeBytes { get; set; }
+    public DateTime? PdfUploadedAt { get; set; }
 }
+
+/// <summary>
+/// An attached PDF opened for download. The caller owns <see cref="Content"/> and must
+/// dispose it — the API's File() result does so once the response has been written.
+/// </summary>
+public sealed record ScriptPdfFile(Stream Content, string FileName, long? Length);
 
 public class CreateScriptDto
 {

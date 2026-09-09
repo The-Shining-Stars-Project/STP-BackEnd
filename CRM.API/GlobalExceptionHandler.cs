@@ -1,3 +1,4 @@
+using CRM.Application.Exceptions;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -25,8 +26,19 @@ public class GlobalExceptionHandler : IExceptionHandler
             DbUpdateConcurrencyException => (StatusCodes.Status409Conflict, "Conflict"),
             // Must stay below DbUpdateConcurrencyException — it derives from this.
             DbUpdateException => (StatusCodes.Status409Conflict, "Conflict"),
+            // Both derive from InvalidOperationException and must stay above it.
+            InvalidFileException => (StatusCodes.Status400BadRequest, "Bad request"),
+            StorageNotConfiguredException => (StatusCodes.Status503ServiceUnavailable, "Service unavailable"),
             InvalidOperationException => (StatusCodes.Status409Conflict, "Conflict"),
             KeyNotFoundException => (StatusCodes.Status404NotFound, "Not found"),
+            // Kestrel refusing a body over [RequestSizeLimit] (413) and the handful of other
+            // malformed-request cases it reports the same way. Without this they were 500s,
+            // and an oversize PDF upload read as a server fault rather than a limit.
+            BadHttpRequestException bad => (bad.StatusCode, bad.StatusCode == StatusCodes.Status413PayloadTooLarge
+                ? "Payload too large"
+                : "Bad request"),
+            // MVC's own multipart limit ([RequestFormLimits]) surfaces as this.
+            InvalidDataException => (StatusCodes.Status400BadRequest, "Bad request"),
             _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred"),
         };
 
@@ -41,6 +53,8 @@ public class GlobalExceptionHandler : IExceptionHandler
             // score racing each other (#6). Saving again after a refresh resolves it.
             DbUpdateException =>
                 "That change conflicts with data already saved. Refresh and try again.",
+            BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge } =>
+                "That upload is larger than this API accepts.",
             _ => exception.Message,
         };
 

@@ -1,5 +1,6 @@
 using CRM.Application.Interfaces;
 using CRM.Infrastructure.Auth;
+using CRM.Infrastructure.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -32,7 +33,18 @@ public static class DependencyInjection
         services.Configure<Time.OrgTimeSettings>(configuration.GetSection(Time.OrgTimeSettings.SectionName));
         services.AddSingleton<IOrgClock, Time.OrgClock>();
 
-        // TODO: Register external service clients here (Blob storage, email, etc.)
+        // --- File storage (Azure Blob) ---
+        // Optional on purpose, unlike Jwt:Key: the API must boot and serve everything else in an
+        // environment where the storage account does not exist yet. Program.cs logs a warning at
+        // startup when it is missing, and file endpoints answer 503 naming the setting to add.
+        // The choice is made here, once, rather than by an "if configured" branch on every call.
+        var blobSection = configuration.GetSection(BlobStorageSettings.SectionName);
+        services.Configure<BlobStorageSettings>(blobSection);
+        var blobSettings = blobSection.Get<BlobStorageSettings>() ?? new BlobStorageSettings();
+        if (blobSettings.IsConfigured)
+            services.AddSingleton<IFileStorage, AzureBlobFileStorage>();
+        else
+            services.AddSingleton<IFileStorage, UnconfiguredFileStorage>();
 
         return services;
     }
