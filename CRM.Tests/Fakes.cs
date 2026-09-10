@@ -78,9 +78,10 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
     public IRepository<Game> Games { get; } = new FakeRepository<Game>();
     public IRepository<GameSubGoal> GameSubGoals { get; } = new FakeRepository<GameSubGoal>();
     public FakeRepository<Site> SitesRepo { get; } = new();
+    public FakeRepository<RosterAssignment> RosterAssignmentsRepo { get; } = new();
     public IRepository<Site> Sites => SitesRepo;
     public IRepository<StarGroup> StarGroups { get; } = new FakeRepository<StarGroup>();
-    public IRepository<RosterAssignment> RosterAssignments { get; } = new FakeRepository<RosterAssignment>();
+    public IRepository<RosterAssignment> RosterAssignments => RosterAssignmentsRepo;
     public IRepository<ParticipantArtsProfile> ParticipantArtsProfiles { get; } = new FakeRepository<ParticipantArtsProfile>();
     public IRepository<WeeklyDataEntry> WeeklyDataEntries { get; } = new FakeRepository<WeeklyDataEntry>();
     public FakeRepository<MonthlyProgressSnapshot> MonthlyProgressSnapshotsRepo { get; } = new();
@@ -122,6 +123,21 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
     public Task RemoveStaffProgramAssignmentAsync(Guid staffMemberId, Guid programId)
     {
         StaffProgramAssignments.RemoveAll(a => a.StaffMemberId == staffMemberId && a.ProgramId == programId);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Roster site pairings, in memory. Composite PK, so no generic repository.</summary>
+    public List<RosterAssignmentSite> RosterAssignmentSites { get; } = new();
+
+    public Task<IReadOnlyList<RosterAssignmentSite>> GetRosterAssignmentSitesAsync(IReadOnlyCollection<Guid> assignmentIds) =>
+        Task.FromResult<IReadOnlyList<RosterAssignmentSite>>(
+            RosterAssignmentSites.Where(s => assignmentIds.Contains(s.RosterAssignmentId)).ToList());
+
+    public Task ReplaceRosterAssignmentSitesAsync(Guid assignmentId, IReadOnlyCollection<Guid> siteIds)
+    {
+        RosterAssignmentSites.RemoveAll(s => s.RosterAssignmentId == assignmentId);
+        foreach (var siteId in siteIds.Distinct())
+            RosterAssignmentSites.Add(new RosterAssignmentSite { RosterAssignmentId = assignmentId, SiteId = siteId });
         return Task.CompletedTask;
     }
 

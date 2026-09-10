@@ -124,6 +124,21 @@ public class UnitOfWork : IUnitOfWork
             _db.Set<EventSessionSite>().Add(new EventSessionSite { EventSessionId = eventSessionId, SiteId = siteId });
     }
 
+    public async Task<IReadOnlyList<RosterAssignmentSite>> GetRosterAssignmentSitesAsync(IReadOnlyCollection<Guid> assignmentIds) =>
+        await _db.Set<RosterAssignmentSite>().AsNoTracking()
+            .Where(s => assignmentIds.Contains(s.RosterAssignmentId)).ToListAsync();
+
+    public async Task ReplaceRosterAssignmentSitesAsync(Guid assignmentId, IReadOnlyCollection<Guid> siteIds)
+    {
+        var existing = await _db.Set<RosterAssignmentSite>()
+            .Where(s => s.RosterAssignmentId == assignmentId).ToListAsync();
+        _db.Set<RosterAssignmentSite>().RemoveRange(existing);
+
+        var valid = await _db.Set<Site>().Where(s => siteIds.Contains(s.Id)).Select(s => s.Id).ToListAsync();
+        foreach (var siteId in valid.Distinct())
+            _db.Set<RosterAssignmentSite>().Add(new RosterAssignmentSite { RosterAssignmentId = assignmentId, SiteId = siteId });
+    }
+
     public async Task<IReadOnlyList<ScriptProgram>> GetScriptProgramsAsync() =>
         await _db.Set<ScriptProgram>().AsNoTracking().ToListAsync();
 

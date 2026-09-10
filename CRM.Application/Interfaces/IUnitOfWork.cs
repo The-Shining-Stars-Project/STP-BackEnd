@@ -69,6 +69,10 @@ public interface IUnitOfWork
     Task<IReadOnlyList<EventSessionSite>> GetEventSessionSitesAsync(Guid eventSessionId);
     Task ReplaceEventSessionSitesAsync(Guid eventSessionId, IReadOnlyCollection<Guid> siteIds);
 
+    // RosterAssignmentSite: composite PK, no BaseEntity — the EventSessionSite pattern.
+    Task<IReadOnlyList<RosterAssignmentSite>> GetRosterAssignmentSitesAsync(IReadOnlyCollection<Guid> assignmentIds);
+    Task ReplaceRosterAssignmentSitesAsync(Guid assignmentId, IReadOnlyCollection<Guid> siteIds);
+
     Task<IReadOnlyList<ScriptProgram>> GetScriptProgramsAsync();
     Task ReplaceScriptProgramsAsync(Guid scriptId, IReadOnlyCollection<Guid> programIds);
 

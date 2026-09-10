@@ -63,8 +63,9 @@ public class TaxonomyService : ITaxonomyService
                              .OrderBy(s => s.SectionNumber).ThenBy(s => s.SortOrder)
                              .ToList(),
             ProgressLevels = Enum.GetNames<ProgressLevel>().ToList(),
-            Sites = sites.OrderBy(s => s.SortOrder)
-                         .Select(s => new SiteDto { Id = s.Id, Name = s.Name, Slug = s.Slug, SortOrder = s.SortOrder })
+            // Dropdowns get active sites only; Settings lists every site via /api/sites.
+            Sites = sites.Where(s => s.IsActive).OrderBy(s => s.SortOrder).ThenBy(s => s.Name)
+                         .Select(s => new SiteDto { Id = s.Id, Name = s.Name, Slug = s.Slug, SortOrder = s.SortOrder, IsActive = s.IsActive })
                          .ToList(),
             StarGroups = groups.OrderBy(g => g.SortOrder)
                                .Select(g => new StarGroupDto { Id = g.Id, Name = g.Name, Slug = g.Slug, SortOrder = g.SortOrder })

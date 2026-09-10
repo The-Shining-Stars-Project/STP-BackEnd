@@ -23,6 +23,7 @@ public static class DependencyInjection
         services.AddScoped<IParticipantService, ParticipantService>();
         services.AddScoped<IParticipantDocumentService, ParticipantDocumentService>();
         services.AddScoped<IParticipantImportService, ParticipantImportService>();
+        services.AddScoped<ISiteService, SiteService>();
         services.AddScoped<IVolunteerService, VolunteerService>();
         services.AddScoped<IArtsProfileService, ArtsProfileService>();
         services.AddScoped<IStaffService, StaffService>();

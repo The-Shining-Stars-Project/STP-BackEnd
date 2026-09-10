@@ -26,7 +26,9 @@ public class RosterAssignment : BaseEntity
     public string? Notes { get; set; }
 
     public Participant? Participant { get; set; }
+    /// <summary>The primary site (first listed). Every site is in <see cref="Sites"/>.</summary>
     public Site? Site { get; set; }
+    public ICollection<RosterAssignmentSite> Sites { get; set; } = new List<RosterAssignmentSite>();
     public StarGroup? StarGroup { get; set; }
     public StaffMember? AssignedStaff { get; set; }
 }
