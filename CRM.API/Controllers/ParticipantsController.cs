@@ -15,15 +15,50 @@ public class ParticipantsController : ControllerBase
     // One megabyte above the service's file ceiling so multipart framing never trips first.
     private const long MaxUploadRequestBytes = ParticipantDocumentService.MaxFileBytes + 1024 * 1024;
 
+    private const long MaxImportRequestBytes = ParticipantImportService.MaxCsvBytes + 1024 * 1024;
+
     private readonly IParticipantService _service;
     private readonly IArtsProfileService _artsProfile;
     private readonly IParticipantDocumentService _documents;
+    private readonly IParticipantImportService _import;
 
-    public ParticipantsController(IParticipantService service, IArtsProfileService artsProfile, IParticipantDocumentService documents)
+    public ParticipantsController(
+        IParticipantService service, IArtsProfileService artsProfile,
+        IParticipantDocumentService documents, IParticipantImportService import)
     {
         _service = service;
         _artsProfile = artsProfile;
         _documents = documents;
+        _import = import;
+    }
+
+    // ── Bulk import ───────────────────────────────────────────────────────────────
+
+    /// <summary>The empty spreadsheet to fill in: one header row, the columns the import understands.</summary>
+    [HttpGet("import/template")]
+    [Authorize(Policy = "ManagementWrite")]
+    public IActionResult ImportTemplate()
+    {
+        var csv = "\uFEFF" + Application.Files.Csv.Line(_import.TemplateHeaders) + "\r\n";
+        return File(System.Text.Encoding.UTF8.GetBytes(csv), "text/csv; charset=utf-8", "stars-import-template.csv");
+    }
+
+    /// <summary>
+    /// Validates a Stars spreadsheet and, with <c>?commit=true</c>, creates every row — or none,
+    /// if any row has a problem. multipart/form-data, one part named "file". The response is the
+    /// same report either way. Audited as one batch; each created star also gets its own
+    /// participant.import row.
+    /// </summary>
+    [HttpPost("import")]
+    [Authorize(Policy = "ManagementWrite")]
+    [Audited("participant.import.batch", "Participant")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(MaxImportRequestBytes)]
+    [RequestFormLimits(MultipartBodyLengthLimit = MaxImportRequestBytes)]
+    public async Task<ActionResult<ParticipantImportReportDto>> Import(IFormFile file, [FromQuery] bool commit, CancellationToken ct)
+    {
+        await using var content = file.OpenReadStream();
+        return Ok(await _import.ImportAsync(User.GetUserId(), content, file.FileName, commit, ct));
     }
 
     /// <summary>
