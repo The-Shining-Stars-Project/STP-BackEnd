@@ -1,19 +1,28 @@
+using CRM.Application.DTOs.Files;
 using CRM.Application.DTOs.Staff;
+using CRM.Application.Files;
 using CRM.Application.Interfaces;
 using CRM.Application.Interfaces.Services;
 using CRM.Domain.Entities;
+using Microsoft.Extensions.Logging;
 
 namespace CRM.Application.Services;
 
 public class StaffService : IStaffService
 {
+    public const long MaxFileBytes = FileValidation.DefaultMaxBytes;
+
     private readonly IUnitOfWork _uow;
     private readonly IOrgClock _clock;
+    private readonly IFileStorage _files;
+    private readonly ILogger<StaffService> _logger;
 
-    public StaffService(IUnitOfWork uow, IOrgClock clock)
+    public StaffService(IUnitOfWork uow, IOrgClock clock, IFileStorage files, ILogger<StaffService> logger)
     {
         _uow = uow;
         _clock = clock;
+        _files = files;
+        _logger = logger;
     }
 
     public async Task<IReadOnlyList<StaffSummaryDto>> GetAllAsync(CancellationToken ct = default)
@@ -75,6 +84,11 @@ public class StaffService : IStaffService
                 IsCompleted = o.IsCompleted,
                 CompletedDate = o.CompletedDate?.ToString("yyyy-MM-dd"),
                 ExpiryDate = o.ExpiryDate?.ToString("yyyy-MM-dd"),
+                HasFile = o.BlobName is not null,
+                FileName = o.FileName,
+                ContentType = o.ContentType,
+                SizeBytes = o.SizeBytes,
+                UploadedAt = o.UploadedAt,
             }).ToList(),
         };
     }
@@ -164,6 +178,101 @@ public class StaffService : IStaffService
         await _uow.SaveChangesAsync();
 
         return await GetByIdAsync(staffId);
+    }
+
+    // ── Onboarding paperwork ──────────────────────────────────────────────────────
+    // Same contract as script PDFs: fresh blob per upload, pointer saved before the previous
+    // blob is deleted, pointer cleared before the blob on removal.
+
+    public async Task<StaffDetailDto?> AttachOnboardingFileAsync(Guid staffId, Guid itemId, Stream content, string fileName, CancellationToken ct = default)
+    {
+        var item = await FindItemAsync(staffId, itemId, ct);
+        if (item is null) return null;
+
+        var file = FileValidation.Validate(content, fileName, FileValidation.Documents, MaxFileBytes);
+        var blobName = $"staff/{staffId:D}/onboarding/{itemId:D}/{Guid.NewGuid():N}{file.Extension}";
+        await _files.UploadAsync(blobName, content, file.ContentType, ct);
+
+        var previous = item.BlobName;
+        item.BlobName = blobName;
+        item.FileName = file.FileName;
+        item.ContentType = file.ContentType;
+        item.SizeBytes = file.Length;
+        item.UploadedAt = DateTime.UtcNow;
+        item.UpdatedAt = DateTime.UtcNow;
+
+        try
+        {
+            await _uow.OnboardingItems.UpdateAsync(item);
+            await _uow.SaveChangesAsync();
+        }
+        catch
+        {
+            await TryDeleteAsync(blobName);
+            throw;
+        }
+
+        if (previous is not null && previous != blobName)
+            await TryDeleteAsync(previous);
+
+        return await GetByIdAsync(staffId);
+    }
+
+    public async Task<StoredFile?> OpenOnboardingFileAsync(Guid staffId, Guid itemId, CancellationToken ct = default)
+    {
+        var item = await FindItemAsync(staffId, itemId, ct);
+        if (item?.BlobName is null) return null;
+
+        var stream = await _files.OpenReadAsync(item.BlobName, ct);
+        if (stream is null)
+        {
+            _logger.LogWarning(
+                "Onboarding item {ItemId} points at blob {BlobName}, which no longer exists in storage.",
+                itemId, item.BlobName);
+            return null;
+        }
+
+        return new StoredFile(stream, item.FileName ?? "document", item.ContentType ?? "application/octet-stream", item.SizeBytes);
+    }
+
+    public async Task<StaffDetailDto?> RemoveOnboardingFileAsync(Guid staffId, Guid itemId, CancellationToken ct = default)
+    {
+        var item = await FindItemAsync(staffId, itemId, ct);
+        if (item is null) return null;
+
+        var blobName = item.BlobName;
+        if (blobName is null) return await GetByIdAsync(staffId);
+
+        item.BlobName = null;
+        item.FileName = null;
+        item.ContentType = null;
+        item.SizeBytes = null;
+        item.UploadedAt = null;
+        item.UpdatedAt = DateTime.UtcNow;
+
+        await _uow.OnboardingItems.UpdateAsync(item);
+        await _uow.SaveChangesAsync();
+
+        await TryDeleteAsync(blobName);
+        return await GetByIdAsync(staffId);
+    }
+
+    private async Task<OnboardingItem?> FindItemAsync(Guid staffId, Guid itemId, CancellationToken ct)
+    {
+        if (await _uow.Staff.GetByIdAsync(staffId) is null) return null;
+        return await _uow.OnboardingItems.FirstOrDefaultAsync(o => o.Id == itemId && o.StaffMemberId == staffId, ct);
+    }
+
+    private async Task TryDeleteAsync(string blobName)
+    {
+        try
+        {
+            await _files.DeleteAsync(blobName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not delete blob {BlobName}; it is now an orphan.", blobName);
+        }
     }
 
     public async Task<IReadOnlyList<ChecklistTemplateItemDto>> GetChecklistTemplateAsync()

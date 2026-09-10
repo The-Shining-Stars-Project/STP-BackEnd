@@ -10,6 +10,9 @@ public class DocumentRecordConfiguration : IEntityTypeConfiguration<DocumentReco
     {
         builder.HasKey(d => d.Id);
         builder.Property(d => d.DocumentType).IsRequired().HasMaxLength(100);
+        builder.Property(d => d.BlobName).HasMaxLength(200);
+        builder.Property(d => d.FileName).HasMaxLength(255);
+        builder.Property(d => d.ContentType).HasMaxLength(100);
 
         builder.HasOne(d => d.Participant)
                .WithMany(p => p.Documents)

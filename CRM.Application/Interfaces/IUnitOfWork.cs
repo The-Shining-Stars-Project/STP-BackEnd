@@ -7,6 +7,7 @@ namespace CRM.Application.Interfaces;
 public interface IUnitOfWork
 {
     IRepository<Participant> Participants { get; }
+    IRepository<DocumentRecord> DocumentRecords { get; }
     IRepository<Volunteer> Volunteers { get; }
     IRepository<StaffMember> Staff { get; }
     IRepository<CrmProgram> Programs { get; }

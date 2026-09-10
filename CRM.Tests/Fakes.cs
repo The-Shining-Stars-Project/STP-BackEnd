@@ -51,6 +51,7 @@ internal sealed class FakeRepository<T> : IRepository<T> where T : BaseEntity
 internal sealed class FakeUnitOfWork : IUnitOfWork
 {
     public FakeRepository<Participant> ParticipantsRepo { get; } = new();
+    public FakeRepository<DocumentRecord> DocumentRecordsRepo { get; } = new();
     public FakeRepository<StaffMember> StaffRepo { get; } = new();
     public FakeRepository<CrmProgram> ProgramsRepo { get; } = new();
     public FakeRepository<User> UsersRepo { get; } = new();
@@ -61,6 +62,7 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
     public List<StaffProgramAssignment> StaffProgramAssignments { get; } = new();
 
     public IRepository<Participant> Participants => ParticipantsRepo;
+    public IRepository<DocumentRecord> DocumentRecords => DocumentRecordsRepo;
     public IRepository<StaffMember> Staff => StaffRepo;
     public IRepository<CrmProgram> Programs => ProgramsRepo;
     public IRepository<User> Users => UsersRepo;

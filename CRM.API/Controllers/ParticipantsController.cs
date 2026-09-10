@@ -1,6 +1,7 @@
 using CRM.API.Auditing;
 using CRM.Application.DTOs.Participants;
 using CRM.Application.Interfaces.Services;
+using CRM.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,13 +12,18 @@ namespace CRM.API.Controllers;
 [Route("api/[controller]")]
 public class ParticipantsController : ControllerBase
 {
+    // One megabyte above the service's file ceiling so multipart framing never trips first.
+    private const long MaxUploadRequestBytes = ParticipantDocumentService.MaxFileBytes + 1024 * 1024;
+
     private readonly IParticipantService _service;
     private readonly IArtsProfileService _artsProfile;
+    private readonly IParticipantDocumentService _documents;
 
-    public ParticipantsController(IParticipantService service, IArtsProfileService artsProfile)
+    public ParticipantsController(IParticipantService service, IArtsProfileService artsProfile, IParticipantDocumentService documents)
     {
         _service = service;
         _artsProfile = artsProfile;
+        _documents = documents;
     }
 
     /// <summary>
@@ -100,5 +106,75 @@ public class ParticipantsController : ControllerBase
     {
         var profile = await _artsProfile.UpsertAsync(User.GetUserId(), id, dto);
         return profile is null ? NotFound() : Ok(profile);
+    }
+    // ── Documents ─────────────────────────────────────────────────────────────────
+    // A star's paperwork. Scoping is the participant's (#1): the service resolves the
+    // caller's programs and 403s out-of-scope reads and writes alike. Files stream through
+    // the API rather than as storage URLs so the container stays private. The entity id on
+    // every audit row is the PARTICIPANT — "who touched this child's records" is the question.
+
+    [HttpGet("{id:guid}/documents")]
+    public async Task<ActionResult<IReadOnlyList<DocumentRecordDto>>> ListDocuments(Guid id, CancellationToken ct)
+    {
+        var result = await _documents.ListAsync(User.GetUserId(), id, ct);
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    [HttpPost("{id:guid}/documents")]
+    [Authorize(Policy = "ManagementWrite")]
+    [Audited("participant.document.create", "Participant")]
+    public async Task<ActionResult<DocumentRecordDto>> CreateDocument(Guid id, [FromBody] CreateDocumentRecordDto dto, CancellationToken ct)
+    {
+        var result = await _documents.CreateAsync(User.GetUserId(), id, dto, ct);
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    [HttpPut("{id:guid}/documents/{docId:guid}")]
+    [Authorize(Policy = "ManagementWrite")]
+    [Audited("participant.document.update", "Participant")]
+    public async Task<ActionResult<DocumentRecordDto>> UpdateDocument(Guid id, Guid docId, [FromBody] UpdateDocumentRecordDto dto, CancellationToken ct)
+    {
+        var result = await _documents.UpdateAsync(User.GetUserId(), id, docId, dto, ct);
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    [HttpDelete("{id:guid}/documents/{docId:guid}")]
+    [Authorize(Policy = "ManagementWrite")]
+    [Audited("participant.document.delete", "Participant")]
+    public async Task<IActionResult> DeleteDocument(Guid id, Guid docId, CancellationToken ct) =>
+        await _documents.DeleteAsync(User.GetUserId(), id, docId, ct) ? NoContent() : NotFound();
+
+    /// <summary>Attaches (or replaces) the file: multipart/form-data, one part named "file". PDF, PNG or JPG.</summary>
+    [HttpPost("{id:guid}/documents/{docId:guid}/file")]
+    [Authorize(Policy = "ManagementWrite")]
+    [Audited("participant.document.upload", "Participant")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(MaxUploadRequestBytes)]
+    [RequestFormLimits(MultipartBodyLengthLimit = MaxUploadRequestBytes)]
+    public async Task<ActionResult<DocumentRecordDto>> UploadDocumentFile(Guid id, Guid docId, IFormFile file, CancellationToken ct)
+    {
+        await using var content = file.OpenReadStream();
+        var result = await _documents.AttachFileAsync(User.GetUserId(), id, docId, content, file.FileName, ct);
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    // Reads are audited here, unlike script PDFs: a script is shared teaching material, a
+    // star's intake packet is a child's medical and legal paperwork.
+    [HttpGet("{id:guid}/documents/{docId:guid}/file")]
+    [Audited("participant.document.download", "Participant")]
+    public async Task<IActionResult> DownloadDocumentFile(Guid id, Guid docId, CancellationToken ct)
+    {
+        var file = await _documents.OpenFileAsync(User.GetUserId(), id, docId, ct);
+        if (file is null) return NotFound();
+        return File(file.Content, file.ContentType, file.FileName);
+    }
+
+    [HttpDelete("{id:guid}/documents/{docId:guid}/file")]
+    [Authorize(Policy = "ManagementWrite")]
+    [Audited("participant.document.file.delete", "Participant")]
+    public async Task<ActionResult<DocumentRecordDto>> DeleteDocumentFile(Guid id, Guid docId, CancellationToken ct)
+    {
+        var result = await _documents.RemoveFileAsync(User.GetUserId(), id, docId, ct);
+        return result is null ? NotFound() : Ok(result);
     }
 }

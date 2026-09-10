@@ -48,6 +48,7 @@ public class ParticipantService : IParticipantService
         var prog = await _uow.Programs.GetByIdAsync(p.ProgramId);
         var secondary = p.SecondaryProgramId is { } sid ? await _uow.Programs.GetByIdAsync(sid) : null;
         var records = await _uow.Attendance.ListAsync(r => r.ParticipantId == id);
+        var documents = await _uow.DocumentRecords.ListAsync(d => d.ParticipantId == id);
 
         return new ParticipantDetailDto
         {
@@ -83,7 +84,7 @@ public class ParticipantService : IParticipantService
             SecondaryProgramId = p.SecondaryProgramId,
             SecondaryProgramName = secondary?.Name,
             SecondaryProgramSlug = secondary?.Slug,
-            Documents = new(),
+            Documents = documents.OrderBy(d => d.CreatedAt).Select(ParticipantDocumentService.ToDto).ToList(),
             RecentAttendance = new(),
         };
     }
