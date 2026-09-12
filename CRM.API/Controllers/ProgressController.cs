@@ -38,6 +38,21 @@ public class ProgressController : ControllerBase
         return Ok(await _service.SetFocusSkillsAsync(User.GetUserId(), dto));
     }
 
+    /// <summary>
+    /// Every weekly score for a program's stars in one month. The Weekly Data grid used to
+    /// fetch each star's month separately (N requests, N audit rows per page load); this is
+    /// the one-request form. Audited like the per-star read: it is still scores for named
+    /// children, just more of them at once.
+    /// </summary>
+    [HttpGet("weekly")]
+    [Audited("progress.weekly.list", "WeeklyDataEntry")]
+    public async Task<ActionResult<IReadOnlyList<WeeklyDataEntryDto>>> GetProgramMonth(
+        [FromQuery] Guid programId, [FromQuery] string month)
+    {
+        if (programId == Guid.Empty || string.IsNullOrWhiteSpace(month)) return BadRequest("programId and month are required.");
+        return Ok(await _service.GetProgramMonthAsync(User.GetUserId(), programId, month));
+    }
+
     [HttpPost("weekly")]
     [Audited("progress.weekly.record", "WeeklyDataEntry")]
     public async Task<ActionResult<WeeklyDataEntryDto>> RecordWeekly([FromBody] RecordWeeklyScoreDto dto)

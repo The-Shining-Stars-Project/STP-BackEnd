@@ -68,11 +68,14 @@ public class VolunteerService : IVolunteerService
         return await GetByIdAsync(id);
     }
 
+    /// <summary>Soft delete — the row stays but the global query filter hides it everywhere.</summary>
     public async Task<bool> DeleteAsync(Guid id)
     {
         var v = await _uow.Volunteers.GetByIdAsync(id);
         if (v is null) return false;
-        await _uow.Volunteers.DeleteAsync(v);
+        v.IsDeleted = true;
+        v.DeletedAt = DateTime.UtcNow;
+        await _uow.Volunteers.UpdateAsync(v);
         await _uow.SaveChangesAsync();
         return true;
     }

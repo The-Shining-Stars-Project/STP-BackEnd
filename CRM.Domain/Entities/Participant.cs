@@ -43,6 +43,21 @@ public class Participant : BaseEntity
     public bool IntakeDocsSubmitted { get; set; }
     public bool? HasHighSchoolDiploma { get; set; }
 
+    /// <summary>
+    /// Up to five emergency contacts, one per line, each as free text ("Maria Rivera – (209) 555-0100").
+    /// Stored newline-joined; the DTOs expose it as a list.
+    /// </summary>
+    public string? EmergencyContacts { get; set; }
+
+    /// <summary>
+    /// Soft delete: a removed star vanishes from every list and lookup (global query filter)
+    /// but its attendance, scores and documents stay on disk. A hard delete failed on the
+    /// Restrict foreign keys the moment a star had any attendance history, and erasing a
+    /// child's records outright is not something a click should be able to do.
+    /// </summary>
+    public bool IsDeleted { get; set; }
+    public DateTime? DeletedAt { get; set; }
+
     /// <summary>Second program enrollment — a star can attend Part-Time and Pathways at once.</summary>
     public Guid? SecondaryProgramId { get; set; }
     public CrmProgram? SecondaryProgram { get; set; }

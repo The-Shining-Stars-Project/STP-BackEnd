@@ -18,5 +18,9 @@ public class Volunteer : BaseEntity
     public bool IsActive { get; set; } = true;
     public DateTime StartDate { get; set; } = DateTime.UtcNow;
 
+    /// <summary>Soft delete — hidden by a global query filter; see <see cref="Participant.IsDeleted"/>.</summary>
+    public bool IsDeleted { get; set; }
+    public DateTime? DeletedAt { get; set; }
+
     public CrmProgram Program { get; set; } = null!;
 }

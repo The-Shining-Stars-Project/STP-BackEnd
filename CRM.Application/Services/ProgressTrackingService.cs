@@ -171,6 +171,19 @@ public class ProgressTrackingService : IProgressTrackingService
         return snap;
     }
 
+    public async Task<IReadOnlyList<WeeklyDataEntryDto>> GetProgramMonthAsync(Guid currentUserId, Guid programId, string monthKey)
+    {
+        (await _access.ForUserAsync(currentUserId)).Require(programId);
+
+        var ids = (await _uow.Participants.ListAsync(p => p.ProgramId == programId || p.SecondaryProgramId == programId))
+            .Select(p => p.Id)
+            .ToHashSet();
+        if (ids.Count == 0) return [];
+
+        var entries = await _uow.WeeklyDataEntries.ListAsync(e => e.MonthKey == monthKey && ids.Contains(e.ParticipantId));
+        return entries.OrderBy(e => e.WeekNumber).Select(ToEntryDto).ToList();
+    }
+
     public async Task<StarMonthDto?> GetStarMonthAsync(Guid currentUserId, Guid participantId, string monthKey)
     {
         if (await _access.RequireParticipantAsync(currentUserId, participantId) is null) return null;

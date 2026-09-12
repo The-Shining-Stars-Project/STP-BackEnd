@@ -18,6 +18,13 @@ public interface IProgressTrackingService
     /// <summary>Records (upserts) one weekly Data score for a Star on a sub-skill; stamps the recorder from the caller.</summary>
     Task<WeeklyDataEntryDto?> RecordWeeklyScoreAsync(Guid currentUserId, RecordWeeklyScoreDto dto);
 
+    /// <summary>
+    /// Every weekly entry for a program's stars (primary or secondary enrollment) in one month —
+    /// the Weekly Data grid's bulk read, one call per program instead of one per star.
+    /// Throws <see cref="UnauthorizedAccessException"/> if the program is out of scope.
+    /// </summary>
+    Task<IReadOnlyList<WeeklyDataEntryDto>> GetProgramMonthAsync(Guid currentUserId, Guid programId, string monthKey);
+
     /// <summary>A Star's full month: weekly entries + month-end snapshots. Null if the participant doesn't exist.</summary>
     Task<StarMonthDto?> GetStarMonthAsync(Guid currentUserId, Guid participantId, string monthKey);
 

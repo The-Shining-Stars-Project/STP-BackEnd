@@ -31,6 +31,9 @@ public class GlobalExceptionHandler : IExceptionHandler
             StorageNotConfiguredException => (StatusCodes.Status503ServiceUnavailable, "Service unavailable"),
             InvalidOperationException => (StatusCodes.Status409Conflict, "Conflict"),
             KeyNotFoundException => (StatusCodes.Status404NotFound, "Not found"),
+            // Services reject a bad value (too many emergency contacts, an over-long entry)
+            // with ArgumentException; that is the caller's mistake, not a fault.
+            ArgumentException => (StatusCodes.Status400BadRequest, "Bad request"),
             // Kestrel refusing a body over [RequestSizeLimit] (413) and the handful of other
             // malformed-request cases it reports the same way. Without this they were 500s,
             // and an oversize PDF upload read as a server fault rather than a limit.

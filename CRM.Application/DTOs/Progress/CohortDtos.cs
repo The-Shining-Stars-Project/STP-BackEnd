@@ -34,15 +34,18 @@ public class CohortRollUpRowDto
 }
 
 /// <summary>
-/// Where the cohort lives this month — per-skill level counts aggregated from CONFIRMED
-/// month-end snapshots only. Computed live (no stored table). Optionally scoped to one program.
+/// Where the cohort lives this month — per-skill level counts derived from the month's
+/// weekly scores, with confirmed month-end levels overriding. Computed live (no stored
+/// table). Optionally scoped to one program.
 /// </summary>
 public class CohortRollUpDto
 {
     public string MonthKey { get; set; } = string.Empty;
     public Guid? ProgramId { get; set; }
     public string? ProgramName { get; set; }
-    /// <summary>Distinct Stars with at least one confirmed level this month (within scope).</summary>
+    /// <summary>Distinct Stars with at least one real (non-N/A) level this month (within scope).</summary>
     public int ParticipantCount { get; set; }
+    /// <summary>How many of this month's (star, skill) levels a teacher has confirmed — the rest are derived from scores.</summary>
+    public int ConfirmedCount { get; set; }
     public List<CohortRollUpRowDto> Rows { get; set; } = new();
 }

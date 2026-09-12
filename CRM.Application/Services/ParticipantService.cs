@@ -48,7 +48,13 @@ public class ParticipantService : IParticipantService
         var prog = await _uow.Programs.GetByIdAsync(p.ProgramId);
         var secondary = p.SecondaryProgramId is { } sid ? await _uow.Programs.GetByIdAsync(sid) : null;
         var records = await _uow.Attendance.ListAsync(r => r.ParticipantId == id);
-        var documents = await _uow.DocumentRecords.ListAsync(d => d.ParticipantId == id);
+
+        // A star's paperwork is admin-only (client rule): teachers get the profile without
+        // the document list, and the document endpoints themselves are Admin-gated too.
+        var access = await _access.ForUserAsync(userId);
+        var documents = access.IsAdmin
+            ? await _uow.DocumentRecords.ListAsync(d => d.ParticipantId == id)
+            : Array.Empty<DocumentRecord>();
 
         return new ParticipantDetailDto
         {
@@ -81,6 +87,7 @@ public class ParticipantService : IParticipantService
             ContactInRemind = p.ContactInRemind,
             IntakeDocsSubmitted = p.IntakeDocsSubmitted,
             HasHighSchoolDiploma = p.HasHighSchoolDiploma,
+            EmergencyContacts = SplitContacts(p.EmergencyContacts),
             SecondaryProgramId = p.SecondaryProgramId,
             SecondaryProgramName = secondary?.Name,
             SecondaryProgramSlug = secondary?.Slug,
@@ -121,6 +128,7 @@ public class ParticipantService : IParticipantService
             ContactInRemind = dto.ContactInRemind,
             IntakeDocsSubmitted = dto.IntakeDocsSubmitted,
             HasHighSchoolDiploma = dto.HasHighSchoolDiploma,
+            EmergencyContacts = JoinContacts(dto.EmergencyContacts),
             SecondaryProgramId = dto.SecondaryProgramId,
         };
         if (dto.SecondaryProgramId is { } secId) access.Require(secId);
@@ -156,6 +164,8 @@ public class ParticipantService : IParticipantService
         if (dto.ReferralSource is not null) participant.ReferralSource = dto.ReferralSource;
         if (dto.TShirtSize is not null) participant.TShirtSize = dto.TShirtSize;
         if (dto.IntakeNotes is not null) participant.IntakeNotes = dto.IntakeNotes;
+        if (dto.StartDate.HasValue) participant.StartDate = dto.StartDate.Value;
+        if (dto.EmergencyContacts is not null) participant.EmergencyContacts = JoinContacts(dto.EmergencyContacts);
         if (dto.AuthorizationExpiry.HasValue) participant.AuthorizationExpiry = dto.AuthorizationExpiry;
         else if (dto.ClearAuthorizationExpiry) participant.AuthorizationExpiry = null;
         if (dto.IppExpiry.HasValue) participant.IppExpiry = dto.IppExpiry;
@@ -186,15 +196,46 @@ public class ParticipantService : IParticipantService
         return await GetByIdAsync(userId, id);
     }
 
+    /// <summary>
+    /// Soft delete. The row stays (attendance, scores and documents keep their foreign keys —
+    /// a hard delete failed on the Restrict constraints the moment a star had history) but the
+    /// global query filter hides it from every list, lookup and navigation from here on.
+    /// </summary>
     public async Task<bool> DeleteAsync(Guid userId, Guid id)
     {
         var participant = await _access.RequireParticipantAsync(userId, id);
         if (participant is null) return false;
 
-        await _uow.Participants.DeleteAsync(participant);
+        participant.IsDeleted = true;
+        participant.DeletedAt = DateTime.UtcNow;
+        await _uow.Participants.UpdateAsync(participant);
         await _uow.SaveChangesAsync();
         return true;
     }
+
+    // ── Emergency contacts ──────────────────────────────────────────────────────
+    // Stored newline-joined in one column; exposed as a list. Blank lines are dropped,
+    // each line is trimmed, and the caps are enforced here rather than trusted from the
+    // DTO attributes alone, because the CSV import builds participants too.
+
+    internal static string? JoinContacts(IEnumerable<string>? contacts)
+    {
+        if (contacts is null) return null;
+        var lines = contacts
+            .Select(c => (c ?? string.Empty).Replace("\r", " ").Replace("\n", " ").Trim())
+            .Where(c => c.Length > 0)
+            .ToList();
+        if (lines.Count > ParticipantLimits.EmergencyContactsMax)
+            throw new ArgumentException($"At most {ParticipantLimits.EmergencyContactsMax} emergency contacts can be recorded.");
+        if (lines.Any(c => c.Length > ParticipantLimits.EmergencyContactMaxLength))
+            throw new ArgumentException($"Each emergency contact must be {ParticipantLimits.EmergencyContactMaxLength} characters or fewer.");
+        return lines.Count == 0 ? null : string.Join("\n", lines);
+    }
+
+    internal static List<string> SplitContacts(string? stored) =>
+        string.IsNullOrWhiteSpace(stored)
+            ? new List<string>()
+            : stored.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
     private static ParticipantSummaryDto ToSummary(
         Participant p,
@@ -232,6 +273,7 @@ public class ParticipantService : IParticipantService
             ContactInRemind = p.ContactInRemind,
             IntakeDocsSubmitted = p.IntakeDocsSubmitted,
             HasHighSchoolDiploma = p.HasHighSchoolDiploma,
+            EmergencyContacts = SplitContacts(p.EmergencyContacts),
             SecondaryProgramId = p.SecondaryProgramId,
             SecondaryProgramName = p.SecondaryProgramId is { } sid2 ? programMap.GetValueOrDefault(sid2) : null,
             SecondaryProgramSlug = p.SecondaryProgramId is { } sid3 ? slugMap?.GetValueOrDefault(sid3) : null,

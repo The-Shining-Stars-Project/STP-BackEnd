@@ -3,6 +3,15 @@ using CRM.Domain.Enums;
 
 namespace CRM.Application.DTOs.Participants;
 
+/// <summary>Field limits shared by the DTOs, the service and the EF configuration.</summary>
+public static class ParticipantLimits
+{
+    /// <summary>Intake notes are free-form (nvarchar(max)); this is a sanity ceiling, not a column width.</summary>
+    public const int IntakeNotesMax = 20_000;
+    public const int EmergencyContactsMax = 5;
+    public const int EmergencyContactMaxLength = 300;
+}
+
 public class CreateParticipantDto
 {
     [Required]
@@ -41,12 +50,16 @@ public class CreateParticipantDto
     [StringLength(20)]
     public string? TShirtSize { get; set; }
 
-    [StringLength(2000)]
+    [StringLength(ParticipantLimits.IntakeNotesMax)]
     public string? IntakeNotes { get; set; }
 
     public DateTime? AuthorizationExpiry { get; set; }
     public DateTime? IppExpiry { get; set; }
     public DateTime? DateOfBirth { get; set; }
+
+    /// <summary>Up to five free-text contacts ("name – phone"). Blank entries are dropped.</summary>
+    [MaxLength(ParticipantLimits.EmergencyContactsMax)]
+    public List<string>? EmergencyContacts { get; set; }
 
     [StringLength(500)]
     public string? Allergies { get; set; }
@@ -102,8 +115,15 @@ public class UpdateParticipantDto
     [StringLength(20)]
     public string? TShirtSize { get; set; }
 
-    [StringLength(2000)]
+    [StringLength(ParticipantLimits.IntakeNotesMax)]
     public string? IntakeNotes { get; set; }
+
+    /// <summary>The day the star started; editable because intake often records it after the fact.</summary>
+    public DateTime? StartDate { get; set; }
+
+    /// <summary>Replaces the contact list when present (send an empty list to clear); null means "unchanged".</summary>
+    [MaxLength(ParticipantLimits.EmergencyContactsMax)]
+    public List<string>? EmergencyContacts { get; set; }
 
     public DateTime? AuthorizationExpiry { get; set; }
 

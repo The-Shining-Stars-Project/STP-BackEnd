@@ -15,6 +15,8 @@ public class VolunteerConfiguration : IEntityTypeConfiguration<Volunteer>
         builder.Property(v => v.Email).HasMaxLength(200);
         builder.Property(v => v.Notes).HasMaxLength(2000);
 
+        builder.HasQueryFilter(v => !v.IsDeleted);
+
         builder.HasOne(v => v.Program)
                .WithMany()
                .HasForeignKey(v => v.ProgramId)

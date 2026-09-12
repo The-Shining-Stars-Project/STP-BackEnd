@@ -42,6 +42,9 @@ public class ParticipantSummaryDto
     public bool IntakeDocsSubmitted { get; set; }
     public bool? HasHighSchoolDiploma { get; set; }
 
+    /// <summary>Up to five free-text emergency contacts, in the order entered.</summary>
+    public List<string> EmergencyContacts { get; set; } = new();
+
     public Guid? SecondaryProgramId { get; set; }
     public string? SecondaryProgramName { get; set; }
     public string? SecondaryProgramSlug { get; set; }

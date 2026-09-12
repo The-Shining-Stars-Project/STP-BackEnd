@@ -1,10 +1,19 @@
 using CRM.Application.DTOs.Progress;
 using CRM.Application.Interfaces;
 using CRM.Application.Interfaces.Services;
+using CRM.Domain.Entities;
 using CRM.Domain.Enums;
 
 namespace CRM.Application.Services;
 
+/// <summary>
+/// Where the cohort lives this month. Every star with weekly scores on a skill gets a level
+/// derived from those scores (average → threshold, exactly as the tracker's month-end
+/// column does); a level a teacher has confirmed overrides the derived one. Confirmation is
+/// therefore a correction step, not a prerequisite — the client's ask was "stars should
+/// populate based on their score", and with confirmed-only counts the roll-up sat empty
+/// all month while the data was already in.
+/// </summary>
 public class CohortRollUpService : ICohortRollUpService
 {
     private readonly IUnitOfWork _uow;
@@ -13,41 +22,23 @@ public class CohortRollUpService : ICohortRollUpService
 
     public async Task<CohortRollUpDto> GetRollUpAsync(string monthKey, Guid? programId)
     {
-        // Only confirmed snapshots count toward the roll-up. When scoped to a program,
-        // resolve the participant ids first so the snapshot filter runs in SQL
-        // (Contains translates to IN) instead of loading the whole month and filtering
-        // in memory (#29).
-        string? programName = null;
-        IReadOnlyList<Domain.Entities.MonthlyProgressSnapshot> snaps;
-        if (programId is { } pid)
-        {
-            var program = await _uow.Programs.GetByIdAsync(pid);
-            programName = program?.Name;
-            var inProgram = (await _uow.Participants.ListAsync(p => p.ProgramId == pid))
-                .Select(p => p.Id)
-                .ToHashSet();
-            snaps = await _uow.MonthlyProgressSnapshots.ListAsync(
-                s => s.MonthKey == monthKey && s.IsConfirmed && inProgram.Contains(s.ParticipantId));
-        }
-        else
-        {
-            snaps = await _uow.MonthlyProgressSnapshots.ListAsync(
-                s => s.MonthKey == monthKey && s.IsConfirmed);
-        }
+        var month = await LoadMonthAsync(monthKey, programId);
 
         var subSkills = (await _uow.SubSkills.GetAllAsync()).Where(s => s.IsActive).ToList();
         var areas = (await _uow.ObjectiveAreas.GetAllAsync()).ToDictionary(a => a.Id);
-        var bySkill = snaps.GroupBy(s => s.SubSkillId).ToDictionary(g => g.Key, g => g.ToList());
+        var bySkill = month.Levels
+            .GroupBy(l => l.Key.SubSkillId)
+            .ToDictionary(g => g.Key, g => g.Select(l => l.Value).ToList());
 
         var rows = subSkills
             .OrderBy(s => s.SectionNumber).ThenBy(s => s.SortOrder)
             .Select(skill =>
             {
                 var list = bySkill.GetValueOrDefault(skill.Id) ?? new();
-                var nov = list.Count(s => s.Level == ProgressLevel.Novice);
-                var inter = list.Count(s => s.Level == ProgressLevel.Intermediate);
-                var exp = list.Count(s => s.Level == ProgressLevel.Expert);
-                var na = list.Count(s => s.Level == ProgressLevel.NotApplicable);
+                var nov = list.Count(l => l == ProgressLevel.Novice);
+                var inter = list.Count(l => l == ProgressLevel.Intermediate);
+                var exp = list.Count(l => l == ProgressLevel.Expert);
+                var na = list.Count(l => l == ProgressLevel.NotApplicable);
                 var area = areas.GetValueOrDefault(skill.ObjectiveAreaId);
 
                 return new CohortRollUpRowDto
@@ -71,40 +62,35 @@ public class CohortRollUpService : ICohortRollUpService
         {
             MonthKey = monthKey,
             ProgramId = programId,
-            ProgramName = programName,
-            ParticipantCount = snaps.Select(s => s.ParticipantId).Distinct().Count(),
+            ProgramName = month.ProgramName,
+            ParticipantCount = month.Levels
+                .Where(l => IsRealLevel(l.Value))
+                .Select(l => l.Key.ParticipantId)
+                .Distinct()
+                .Count(),
+            ConfirmedCount = month.ConfirmedCount,
             Rows = rows,
         };
     }
 
-    // Mode of the three real levels; ties resolve to the higher level. "—" when nothing scored.
     public async Task<IReadOnlyList<CohortStarDto>> GetStarsAtLevelAsync(
         string monthKey, Guid subSkillId, ProgressLevel level, Guid? programId)
     {
-        // IsConfirmed mirrors GetRollUpAsync exactly. If these two rules ever drift, a user
-        // clicks a count of 7 and is shown 5 names, which reads as data loss rather than as
-        // two different questions being asked.
-        var snaps = await _uow.MonthlyProgressSnapshots.ListAsync(s =>
-            s.MonthKey == monthKey && s.SubSkillId == subSkillId &&
-            s.IsConfirmed && s.Level == level);
+        // Built from the SAME per-(star, skill) map as the counts. If these two ever drift, a
+        // user clicks a count of 7 and is shown 5 names, which reads as data loss rather
+        // than as two different questions being asked.
+        var month = await LoadMonthAsync(monthKey, programId);
 
-        if (snaps.Count == 0) return [];
-
-        var ids = snaps.Select(s => s.ParticipantId).ToHashSet();
-        var stars = await _uow.Participants.ListAsync(p => ids.Contains(p.Id));
-
-        // Scope EXACTLY as GetRollUpAsync does — primary ProgramId only. It is tempting to
-        // include SecondaryProgramId so a dual-enrolled Star appears under both programs, and
-        // arguably it should, but the count this list hangs off does not: clicking a 4 and
-        // being shown 6 names reads as a bug in the number, not as a more generous filter.
-        // Whether dual-enrolled Stars should count toward both programs is a real question for
-        // the client; when it is answered, change BOTH of these together.
-        if (programId is { } pid)
-            stars = stars.Where(p => p.ProgramId == pid).ToList();
+        var ids = month.Levels
+            .Where(l => l.Key.SubSkillId == subSkillId && l.Value == level)
+            .Select(l => l.Key.ParticipantId)
+            .ToHashSet();
+        if (ids.Count == 0) return [];
 
         var programNames = (await _uow.Programs.GetAllAsync()).ToDictionary(p => p.Id, p => p.Name);
 
-        return stars
+        return month.Stars
+            .Where(p => ids.Contains(p.Id))
             .OrderBy(p => p.FullName)
             .Select(p => new CohortStarDto
             {
@@ -116,6 +102,65 @@ public class CohortRollUpService : ICohortRollUpService
             .ToList();
     }
 
+    // ── The shared derivation ─────────────────────────────────────────────────────
+
+    private sealed record MonthLevels(
+        string? ProgramName,
+        IReadOnlyList<Participant> Stars,
+        Dictionary<(Guid ParticipantId, Guid SubSkillId), ProgressLevel> Levels,
+        int ConfirmedCount);
+
+    /// <summary>
+    /// One level per (star, skill) for the month: derived from the weekly scores, then
+    /// overridden by any confirmed snapshot. Scope is the primary program only — a
+    /// dual-enrolled star counts toward the program on their record, not both; the client
+    /// has not asked for double counting, and the counts and the drill-down must agree.
+    /// Soft-deleted stars fall out because the participant list never includes them.
+    /// </summary>
+    private async Task<MonthLevels> LoadMonthAsync(string monthKey, Guid? programId)
+    {
+        string? programName = null;
+        IReadOnlyList<Participant> stars;
+        if (programId is { } pid)
+        {
+            programName = (await _uow.Programs.GetByIdAsync(pid))?.Name;
+            stars = await _uow.Participants.ListAsync(p => p.ProgramId == pid);
+        }
+        else
+        {
+            stars = await _uow.Participants.GetAllAsync();
+        }
+
+        var starIds = stars.Select(s => s.Id).ToHashSet();
+        var levels = new Dictionary<(Guid, Guid), ProgressLevel>();
+        if (starIds.Count == 0) return new MonthLevels(programName, stars, levels, 0);
+
+        // Contains translates to IN, so a program-scoped month stays a SQL-side filter (#29).
+        var entries = await _uow.WeeklyDataEntries.ListAsync(
+            e => e.MonthKey == monthKey && starIds.Contains(e.ParticipantId));
+        var thresholds = (await _uow.ScoreThresholds.GetAllAsync())
+            .Select(t => (t.Level, t.MinAverage)).ToList();
+
+        foreach (var g in entries.GroupBy(e => (e.ParticipantId, e.SubSkillId)))
+        {
+            // A skill scored only N/A this month derives to NotApplicable — a deliberate
+            // "not targeted", which the N/A column reports and the scored count excludes.
+            var r = ProgressLevelCalculator.Derive(g.Select(e => e.Score), thresholds);
+            levels[g.Key] = r.Level;
+        }
+
+        var confirmed = await _uow.MonthlyProgressSnapshots.ListAsync(
+            s => s.MonthKey == monthKey && s.IsConfirmed && starIds.Contains(s.ParticipantId));
+        foreach (var snap in confirmed)
+            levels[(snap.ParticipantId, snap.SubSkillId)] = snap.Level;
+
+        return new MonthLevels(programName, stars, levels, confirmed.Count);
+    }
+
+    private static bool IsRealLevel(ProgressLevel l) =>
+        l is ProgressLevel.Novice or ProgressLevel.Intermediate or ProgressLevel.Expert;
+
+    // Mode of the three real levels; ties resolve to the higher level. "—" when nothing scored.
     private static string MostCommon(int nov, int inter, int exp)
     {
         if (nov + inter + exp == 0) return "—";

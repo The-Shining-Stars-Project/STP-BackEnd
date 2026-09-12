@@ -114,7 +114,8 @@ public class ParticipantsController : ControllerBase
         return result is null ? NotFound() : Ok(result);
     }
 
-    // Permanent deletion of a child's PII — restricted to Admins.
+    // Removing a child's record — restricted to Admins. Soft delete: the row and its history
+    // stay, the star simply disappears from every list.
     [HttpDelete("{id:guid}")]
     [Authorize(Roles = "Admin")]
     [Audited("participant.delete", "Participant")]
@@ -143,12 +144,14 @@ public class ParticipantsController : ControllerBase
         return profile is null ? NotFound() : Ok(profile);
     }
     // ── Documents ─────────────────────────────────────────────────────────────────
-    // A star's paperwork. Scoping is the participant's (#1): the service resolves the
-    // caller's programs and 403s out-of-scope reads and writes alike. Files stream through
-    // the API rather than as storage URLs so the container stays private. The entity id on
-    // every audit row is the PARTICIPANT — "who touched this child's records" is the question.
+    // A star's paperwork — Admin only, reads included (client rule, Sep 2026: teachers must
+    // not see a star's documents; only admins add them). The service still resolves program
+    // scope underneath. Files stream through the API rather than as storage URLs so the
+    // container stays private. The entity id on every audit row is the PARTICIPANT — "who
+    // touched this child's records" is the question.
 
     [HttpGet("{id:guid}/documents")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<IReadOnlyList<DocumentRecordDto>>> ListDocuments(Guid id, CancellationToken ct)
     {
         var result = await _documents.ListAsync(User.GetUserId(), id, ct);
@@ -156,7 +159,7 @@ public class ParticipantsController : ControllerBase
     }
 
     [HttpPost("{id:guid}/documents")]
-    [Authorize(Policy = "ManagementWrite")]
+    [Authorize(Roles = "Admin")]
     [Audited("participant.document.create", "Participant")]
     public async Task<ActionResult<DocumentRecordDto>> CreateDocument(Guid id, [FromBody] CreateDocumentRecordDto dto, CancellationToken ct)
     {
@@ -165,7 +168,7 @@ public class ParticipantsController : ControllerBase
     }
 
     [HttpPut("{id:guid}/documents/{docId:guid}")]
-    [Authorize(Policy = "ManagementWrite")]
+    [Authorize(Roles = "Admin")]
     [Audited("participant.document.update", "Participant")]
     public async Task<ActionResult<DocumentRecordDto>> UpdateDocument(Guid id, Guid docId, [FromBody] UpdateDocumentRecordDto dto, CancellationToken ct)
     {
@@ -174,14 +177,14 @@ public class ParticipantsController : ControllerBase
     }
 
     [HttpDelete("{id:guid}/documents/{docId:guid}")]
-    [Authorize(Policy = "ManagementWrite")]
+    [Authorize(Roles = "Admin")]
     [Audited("participant.document.delete", "Participant")]
     public async Task<IActionResult> DeleteDocument(Guid id, Guid docId, CancellationToken ct) =>
         await _documents.DeleteAsync(User.GetUserId(), id, docId, ct) ? NoContent() : NotFound();
 
     /// <summary>Attaches (or replaces) the file: multipart/form-data, one part named "file". PDF, PNG or JPG.</summary>
     [HttpPost("{id:guid}/documents/{docId:guid}/file")]
-    [Authorize(Policy = "ManagementWrite")]
+    [Authorize(Roles = "Admin")]
     [Audited("participant.document.upload", "Participant")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(MaxUploadRequestBytes)]
@@ -196,6 +199,7 @@ public class ParticipantsController : ControllerBase
     // Reads are audited here, unlike script PDFs: a script is shared teaching material, a
     // star's intake packet is a child's medical and legal paperwork.
     [HttpGet("{id:guid}/documents/{docId:guid}/file")]
+    [Authorize(Roles = "Admin")]
     [Audited("participant.document.download", "Participant")]
     public async Task<IActionResult> DownloadDocumentFile(Guid id, Guid docId, CancellationToken ct)
     {
@@ -205,7 +209,7 @@ public class ParticipantsController : ControllerBase
     }
 
     [HttpDelete("{id:guid}/documents/{docId:guid}/file")]
-    [Authorize(Policy = "ManagementWrite")]
+    [Authorize(Roles = "Admin")]
     [Audited("participant.document.file.delete", "Participant")]
     public async Task<ActionResult<DocumentRecordDto>> DeleteDocumentFile(Guid id, Guid docId, CancellationToken ct)
     {

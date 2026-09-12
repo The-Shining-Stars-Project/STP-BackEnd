@@ -13,6 +13,15 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.AddDbContext<AppDbContext>(options =>
+        {
+            // Participants and Volunteers carry a soft-delete query filter, and several tables
+            // (attendance, scores, roster rows) have a REQUIRED navigation to Participant. EF
+            // warns that joining through such a navigation drops the dependent rows of a
+            // filtered-out star. That is exactly the intent — a removed star's history leaves
+            // the stats with them — so the warning is noise on every boot.
+            options.ConfigureWarnings(w => w.Ignore(
+                Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning));
+
             options.UseSqlServer(
                 configuration.GetConnectionString("DefaultConnection"),
                 sqlOptions =>
@@ -36,7 +45,8 @@ public static class DependencyInjection
                     // A query that has not answered in 30s is not going to; fail rather than
                     // hold the request thread open.
                     sqlOptions.CommandTimeout(30);
-                }));
+                });
+        });
 
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IStatsQueries, Queries.StatsQueries>();

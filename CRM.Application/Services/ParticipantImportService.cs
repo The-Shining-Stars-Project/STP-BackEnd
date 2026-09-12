@@ -273,7 +273,7 @@ public class ParticipantImportService : IParticipantImportService
                 ("Service coordinator phone", entity.ServiceCoordinatorPhone, 50),
                 ("Referral source", entity.ReferralSource, 200), ("T-shirt size", entity.TShirtSize, 20),
                 ("Allergies", entity.Allergies, 500), ("Areas of concern", entity.AreasOfConcern, 1000),
-                ("Contact in Remind", entity.ContactInRemind, 300), ("Notes", entity.IntakeNotes, 2000),
+                ("Contact in Remind", entity.ContactInRemind, 300), ("Notes", entity.IntakeNotes, ParticipantLimits.IntakeNotesMax),
             })
                 if (value is not null && value.Length > max)
                     problems.Add($"{field} is {value.Length} characters; the limit is {max}.");
