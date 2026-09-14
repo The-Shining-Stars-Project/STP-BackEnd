@@ -88,6 +88,10 @@ public class ParticipantService : IParticipantService
             IntakeDocsSubmitted = p.IntakeDocsSubmitted,
             HasHighSchoolDiploma = p.HasHighSchoolDiploma,
             EmergencyContacts = SplitContacts(p.EmergencyContacts),
+            IsSdpClient = p.IsSdpClient,
+            SdpFmsName = p.SdpFmsName,
+            SdpIndependentFacilitator = p.SdpIndependentFacilitator,
+            SdpStartDate = p.SdpStartDate?.ToString("yyyy-MM-dd"),
             SecondaryProgramId = p.SecondaryProgramId,
             SecondaryProgramName = secondary?.Name,
             SecondaryProgramSlug = secondary?.Slug,
@@ -129,6 +133,10 @@ public class ParticipantService : IParticipantService
             IntakeDocsSubmitted = dto.IntakeDocsSubmitted,
             HasHighSchoolDiploma = dto.HasHighSchoolDiploma,
             EmergencyContacts = JoinContacts(dto.EmergencyContacts),
+            IsSdpClient = dto.IsSdpClient,
+            SdpFmsName = dto.SdpFmsName,
+            SdpIndependentFacilitator = dto.SdpIndependentFacilitator,
+            SdpStartDate = dto.SdpStartDate,
             SecondaryProgramId = dto.SecondaryProgramId,
         };
         if (dto.SecondaryProgramId is { } secId) access.Require(secId);
@@ -166,6 +174,11 @@ public class ParticipantService : IParticipantService
         if (dto.IntakeNotes is not null) participant.IntakeNotes = dto.IntakeNotes;
         if (dto.StartDate.HasValue) participant.StartDate = dto.StartDate.Value;
         if (dto.EmergencyContacts is not null) participant.EmergencyContacts = JoinContacts(dto.EmergencyContacts);
+        if (dto.IsSdpClient.HasValue) participant.IsSdpClient = dto.IsSdpClient;
+        if (dto.SdpFmsName is not null) participant.SdpFmsName = dto.SdpFmsName;
+        if (dto.SdpIndependentFacilitator is not null) participant.SdpIndependentFacilitator = dto.SdpIndependentFacilitator;
+        if (dto.SdpStartDate.HasValue) participant.SdpStartDate = dto.SdpStartDate;
+        else if (dto.ClearSdpStartDate) participant.SdpStartDate = null;
         if (dto.AuthorizationExpiry.HasValue) participant.AuthorizationExpiry = dto.AuthorizationExpiry;
         else if (dto.ClearAuthorizationExpiry) participant.AuthorizationExpiry = null;
         if (dto.IppExpiry.HasValue) participant.IppExpiry = dto.IppExpiry;
@@ -193,6 +206,21 @@ public class ParticipantService : IParticipantService
         await _uow.Participants.UpdateAsync(participant);
         await _uow.SaveChangesAsync();
 
+        return await GetByIdAsync(userId, id);
+    }
+
+    /// <summary>
+    /// Notes-only update for teachers: in-scope like every read, no management policy. The
+    /// profile's other fields stay behind ManagementWrite on the full update.
+    /// </summary>
+    public async Task<ParticipantDetailDto?> UpdateIntakeNotesAsync(Guid userId, Guid id, string? notes)
+    {
+        var participant = await _access.RequireParticipantAsync(userId, id);
+        if (participant is null) return null;
+
+        participant.IntakeNotes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        await _uow.Participants.UpdateAsync(participant);
+        await _uow.SaveChangesAsync();
         return await GetByIdAsync(userId, id);
     }
 
@@ -274,6 +302,10 @@ public class ParticipantService : IParticipantService
             IntakeDocsSubmitted = p.IntakeDocsSubmitted,
             HasHighSchoolDiploma = p.HasHighSchoolDiploma,
             EmergencyContacts = SplitContacts(p.EmergencyContacts),
+            IsSdpClient = p.IsSdpClient,
+            SdpFmsName = p.SdpFmsName,
+            SdpIndependentFacilitator = p.SdpIndependentFacilitator,
+            SdpStartDate = p.SdpStartDate?.ToString("yyyy-MM-dd"),
             SecondaryProgramId = p.SecondaryProgramId,
             SecondaryProgramName = p.SecondaryProgramId is { } sid2 ? programMap.GetValueOrDefault(sid2) : null,
             SecondaryProgramSlug = p.SecondaryProgramId is { } sid3 ? slugMap?.GetValueOrDefault(sid3) : null,

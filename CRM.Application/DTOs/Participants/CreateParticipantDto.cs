@@ -61,6 +61,14 @@ public class CreateParticipantDto
     [MaxLength(ParticipantLimits.EmergencyContactsMax)]
     public List<string>? EmergencyContacts { get; set; }
 
+    // Self-Determination Program.
+    public bool? IsSdpClient { get; set; }
+    [StringLength(200)]
+    public string? SdpFmsName { get; set; }
+    [StringLength(200)]
+    public string? SdpIndependentFacilitator { get; set; }
+    public DateTime? SdpStartDate { get; set; }
+
     [StringLength(500)]
     public string? Allergies { get; set; }
     public bool AllergyAnaphylactic { get; set; }
@@ -125,6 +133,16 @@ public class UpdateParticipantDto
     [MaxLength(ParticipantLimits.EmergencyContactsMax)]
     public List<string>? EmergencyContacts { get; set; }
 
+    // Self-Determination Program. Strings follow the usual "null = unchanged" rule; the date
+    // has a Clear flag like the other dates.
+    public bool? IsSdpClient { get; set; }
+    [StringLength(200)]
+    public string? SdpFmsName { get; set; }
+    [StringLength(200)]
+    public string? SdpIndependentFacilitator { get; set; }
+    public DateTime? SdpStartDate { get; set; }
+    public bool ClearSdpStartDate { get; set; }
+
     public DateTime? AuthorizationExpiry { get; set; }
 
     /// <summary>True clears the stored expiry (a bare null just means "unchanged" on PUT).</summary>
@@ -157,4 +175,14 @@ public class UpdateParticipantDto
     public Guid? SecondaryProgramId { get; set; }
     /// <summary>True removes the secondary enrollment (null alone means "unchanged").</summary>
     public bool ClearSecondaryProgram { get; set; }
+}
+
+/// <summary>
+/// The one field a teacher may change on a star: the intake notes. Everything else on the
+/// profile stays management-only (client rule, Sep 2026).
+/// </summary>
+public class UpdateIntakeNotesDto
+{
+    [StringLength(ParticipantLimits.IntakeNotesMax)]
+    public string? IntakeNotes { get; set; }
 }

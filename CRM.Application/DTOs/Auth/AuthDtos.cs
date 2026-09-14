@@ -41,6 +41,8 @@ public class UpdateUserDto
     public UserRole? Role { get; set; }
     public bool? IsActive { get; set; }
     public Guid? StaffMemberId { get; set; }
+    /// <summary>True removes the staff link (null alone means "unchanged").</summary>
+    public bool ClearStaffMember { get; set; }
 }
 
 public class ResetPasswordDto
@@ -68,6 +70,14 @@ public class UserDto
     public UserRole Role { get; set; }
     public bool IsActive { get; set; }
     public Guid? StaffMemberId { get; set; }
+
+    /// <summary>
+    /// The linked staff record's role (Teacher / Coordinator / Admin), so the UI can tell a
+    /// teacher (read + notes) from a coordinator (management edits) without a second call.
+    /// Null when the account has no staff link. Filled on the session read (/me) and the
+    /// admin user list.
+    /// </summary>
+    public StaffRole? StaffRole { get; set; }
 
     /// <summary>
     /// Whether this account has a confirmed second factor. Not a secret — knowing that an

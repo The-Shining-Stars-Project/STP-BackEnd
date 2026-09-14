@@ -20,5 +20,8 @@ public interface IParticipantService
     /// <summary>Requires scope over both the participant's current program and, when moving them, the destination.</summary>
     Task<ParticipantDetailDto?> UpdateAsync(Guid userId, Guid id, UpdateParticipantDto dto);
 
+    /// <summary>Changes only the intake notes. Open to any in-scope user (teachers included); null if the participant doesn't exist.</summary>
+    Task<ParticipantDetailDto?> UpdateIntakeNotesAsync(Guid userId, Guid id, string? notes);
+
     Task<bool> DeleteAsync(Guid userId, Guid id);
 }

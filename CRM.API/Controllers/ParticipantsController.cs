@@ -114,6 +114,18 @@ public class ParticipantsController : ControllerBase
         return result is null ? NotFound() : Ok(result);
     }
 
+    /// <summary>
+    /// Intake notes only. Deliberately NOT ManagementWrite: teachers may not edit a star's
+    /// record, but they do add to the notes (client rule, Sep 2026). Scope still applies.
+    /// </summary>
+    [HttpPut("{id:guid}/intake-notes")]
+    [Audited("participant.notes.update", "Participant")]
+    public async Task<ActionResult<ParticipantDetailDto>> UpdateIntakeNotes(Guid id, [FromBody] UpdateIntakeNotesDto dto)
+    {
+        var result = await _service.UpdateIntakeNotesAsync(User.GetUserId(), id, dto.IntakeNotes);
+        return result is null ? NotFound() : Ok(result);
+    }
+
     // Removing a child's record — restricted to Admins. Soft delete: the row and its history
     // stay, the star simply disappears from every list.
     [HttpDelete("{id:guid}")]

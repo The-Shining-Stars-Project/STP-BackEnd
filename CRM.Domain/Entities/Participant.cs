@@ -43,6 +43,15 @@ public class Participant : BaseEntity
     public bool IntakeDocsSubmitted { get; set; }
     public bool? HasHighSchoolDiploma { get; set; }
 
+    // Self-Determination Program (regional-center funding model). When a star is an SDP
+    // client the intake records their Financial Management Service and Independent
+    // Facilitator; the SDP start date is always the first of a month and is typed in by an
+    // admin (never defaulted).
+    public bool? IsSdpClient { get; set; }
+    public string? SdpFmsName { get; set; }
+    public string? SdpIndependentFacilitator { get; set; }
+    public DateTime? SdpStartDate { get; set; }
+
     /// <summary>
     /// Up to five emergency contacts, one per line, each as free text ("Maria Rivera – (209) 555-0100").
     /// Stored newline-joined; the DTOs expose it as a list.

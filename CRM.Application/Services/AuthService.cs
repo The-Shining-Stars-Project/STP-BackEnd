@@ -1228,13 +1228,25 @@ public class AuthService : IAuthService
     public async Task<UserDto?> GetByIdAsync(Guid id)
     {
         var user = await _uow.Users.GetByIdAsync(id);
-        return user is null ? null : ToDto(user);
+        if (user is null) return null;
+        var dto = ToDto(user);
+        // The linked staff role decides what the UI offers a signed-in staff account
+        // (teacher: read + notes; coordinator: management edits).
+        if (user.StaffMemberId is { } sid)
+            dto.StaffRole = (await _uow.Staff.GetByIdAsync(sid))?.Role;
+        return dto;
     }
 
     public async Task<IReadOnlyList<UserDto>> GetAllAsync()
     {
         var users = await _uow.Users.GetAllAsync();
-        return users.Select(ToDto).ToList();
+        var staffRoles = (await _uow.Staff.GetAllAsync()).ToDictionary(s => s.Id, s => s.Role);
+        return users.Select(u =>
+        {
+            var dto = ToDto(u);
+            if (u.StaffMemberId is { } sid && staffRoles.TryGetValue(sid, out var role)) dto.StaffRole = role;
+            return dto;
+        }).ToList();
     }
 
     public async Task<UserDto?> UpdateUserAsync(Guid id, UpdateUserDto dto, Guid actingUserId)
@@ -1283,6 +1295,7 @@ public class AuthService : IAuthService
         if (dto.Role.HasValue) user.Role = dto.Role.Value;
         if (dto.IsActive.HasValue) user.IsActive = dto.IsActive.Value;
         if (dto.StaffMemberId.HasValue) user.StaffMemberId = dto.StaffMemberId;
+        else if (dto.ClearStaffMember) user.StaffMemberId = null;
 
         await _uow.Users.UpdateAsync(user);
         await SaveOrAuditFailureAsync("user.update", id, $"Failed to update user {targetEmail}");

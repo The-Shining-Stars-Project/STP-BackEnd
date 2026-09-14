@@ -141,6 +141,46 @@ public class StarLifecycleTests
         Assert.Equal(["Dad – 209-555-0111"], created.EmergencyContacts);
     }
 
+    // ── Teachers: notes only ────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task A_teacher_can_change_the_intake_notes_of_a_star_in_their_program()
+    {
+        var updated = await _participants.UpdateIntakeNotesAsync(TeacherUser, Star, "  Loves the drum circle.  ");
+
+        Assert.Equal("Loves the drum circle.", updated!.IntakeNotes);
+        Assert.Equal("Child In A", updated.FullName); // nothing else touched
+    }
+
+    [Fact]
+    public async Task Blank_notes_clear_the_field()
+    {
+        await _participants.UpdateIntakeNotesAsync(AdminUser, Star, "something");
+        var updated = await _participants.UpdateIntakeNotesAsync(AdminUser, Star, "   ");
+        Assert.Null(updated!.IntakeNotes);
+    }
+
+    // ── SDP ─────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Sdp_fields_round_trip_and_the_date_clears_with_the_flag()
+    {
+        var yes = await _participants.UpdateAsync(AdminUser, Star, new UpdateParticipantDto
+        {
+            IsSdpClient = true, SdpFmsName = "Aveanna", SdpIndependentFacilitator = "Pat Lee",
+            SdpStartDate = new DateTime(2026, 10, 1),
+        });
+        Assert.True(yes!.IsSdpClient);
+        Assert.Equal("Aveanna", yes.SdpFmsName);
+        Assert.Equal("Pat Lee", yes.SdpIndependentFacilitator);
+        Assert.Equal("2026-10-01", yes.SdpStartDate);
+
+        var cleared = await _participants.UpdateAsync(AdminUser, Star, new UpdateParticipantDto { IsSdpClient = false, ClearSdpStartDate = true });
+        Assert.False(cleared!.IsSdpClient);
+        Assert.Null(cleared.SdpStartDate);
+        Assert.Equal("Aveanna", cleared.SdpFmsName); // null string = unchanged, as everywhere else
+    }
+
     // ── Documents are admin-only ────────────────────────────────────────────────
 
     [Fact]

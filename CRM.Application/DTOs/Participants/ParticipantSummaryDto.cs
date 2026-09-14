@@ -45,6 +45,13 @@ public class ParticipantSummaryDto
     /// <summary>Up to five free-text emergency contacts, in the order entered.</summary>
     public List<string> EmergencyContacts { get; set; } = new();
 
+    // Self-Determination Program.
+    public bool? IsSdpClient { get; set; }
+    public string? SdpFmsName { get; set; }
+    public string? SdpIndependentFacilitator { get; set; }
+    /// <summary>yyyy-MM-dd, null when not set. Always the first of a month by policy.</summary>
+    public string? SdpStartDate { get; set; }
+
     public Guid? SecondaryProgramId { get; set; }
     public string? SecondaryProgramName { get; set; }
     public string? SecondaryProgramSlug { get; set; }

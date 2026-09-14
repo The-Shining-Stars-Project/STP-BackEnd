@@ -20,6 +20,8 @@ public class ParticipantConfiguration : IEntityTypeConfiguration<Participant>
         // Intake notes are free-form and routinely run past 2,000 characters — nvarchar(max).
         builder.Property(p => p.IntakeNotes);
         builder.Property(p => p.EmergencyContacts).HasMaxLength(2000);
+        builder.Property(p => p.SdpFmsName).HasMaxLength(200);
+        builder.Property(p => p.SdpIndependentFacilitator).HasMaxLength(200);
         builder.Property(p => p.Allergies).HasMaxLength(500);
         builder.Property(p => p.AreasOfConcern).HasMaxLength(1000);
         builder.Property(p => p.ServiceCoordinatorEmail).HasMaxLength(200);
