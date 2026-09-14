@@ -12,6 +12,12 @@ public class OnboardingItem : BaseEntity
     public DateTime? CompletedDate { get; set; }
     public DateTime? ExpiryDate { get; set; }
 
+    /// <summary>Copied from the template item; expiry = completion + this many months.</summary>
+    public int? RenewalMonths { get; set; }
+
+    /// <summary>Not required for this person (e.g. fingerprinting for someone never at a school site). Excluded from progress and alerts.</summary>
+    public bool IsNotApplicable { get; set; }
+
     /// <summary>
     /// The paperwork behind the checkbox — a signed offer letter, the I-9, the TB result.
     /// Any item can carry one file; the "Documents" section of the template is where it is

@@ -35,4 +35,19 @@ public class CalendarController : ControllerBase
         var result = await _service.CreateEventAsync(dto);
         return Ok(result);
     }
+
+    [HttpPut("events/{id:guid}")]
+    [Authorize(Policy = "ManagementWrite")]
+    [Audited("calendar.event.update", "CalendarEvent")]
+    public async Task<ActionResult<CalendarEventDto>> UpdateEvent(Guid id, [FromBody] UpdateCalendarEventDto dto)
+    {
+        var result = await _service.UpdateEventAsync(id, dto);
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    [HttpDelete("events/{id:guid}")]
+    [Authorize(Policy = "ManagementWrite")]
+    [Audited("calendar.event.delete", "CalendarEvent")]
+    public async Task<IActionResult> DeleteEvent(Guid id) =>
+        await _service.DeleteEventAsync(id) ? NoContent() : NotFound();
 }

@@ -124,6 +124,20 @@ public class UnitOfWork : IUnitOfWork
             _db.Set<EventSessionSite>().Add(new EventSessionSite { EventSessionId = eventSessionId, SiteId = siteId });
     }
 
+    public async Task<IReadOnlyList<CalendarEventSite>> GetCalendarEventSitesAsync(IReadOnlyCollection<Guid> eventIds) =>
+        await _db.Set<CalendarEventSite>().AsNoTracking()
+            .Where(s => eventIds.Contains(s.CalendarEventId)).ToListAsync();
+
+    public async Task ReplaceCalendarEventSitesAsync(Guid eventId, IReadOnlyCollection<Guid> siteIds)
+    {
+        var existing = await _db.Set<CalendarEventSite>()
+            .Where(s => s.CalendarEventId == eventId).ToListAsync();
+        _db.Set<CalendarEventSite>().RemoveRange(existing);
+        var valid = await _db.Set<Site>().Where(s => siteIds.Contains(s.Id)).Select(s => s.Id).ToListAsync();
+        foreach (var siteId in valid.Distinct())
+            _db.Set<CalendarEventSite>().Add(new CalendarEventSite { CalendarEventId = eventId, SiteId = siteId });
+    }
+
     public async Task<IReadOnlyList<RosterAssignmentSite>> GetRosterAssignmentSitesAsync(IReadOnlyCollection<Guid> assignmentIds) =>
         await _db.Set<RosterAssignmentSite>().AsNoTracking()
             .Where(s => assignmentIds.Contains(s.RosterAssignmentId)).ToListAsync();

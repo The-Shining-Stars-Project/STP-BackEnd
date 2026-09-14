@@ -13,6 +13,8 @@ public class OnboardingItemDto
     public bool IsCompleted { get; set; }
     public string? CompletedDate { get; set; }
     public string? ExpiryDate { get; set; }
+    public int? RenewalMonths { get; set; }
+    public bool IsNotApplicable { get; set; }
 
     // The paperwork behind the item, described but never embedded: bytes come from
     // GET /api/staff/{id}/onboarding/{itemId}/file.

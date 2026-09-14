@@ -126,6 +126,20 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
         return Task.CompletedTask;
     }
 
+    public List<CalendarEventSite> CalendarEventSites { get; } = new();
+
+    public Task<IReadOnlyList<CalendarEventSite>> GetCalendarEventSitesAsync(IReadOnlyCollection<Guid> eventIds) =>
+        Task.FromResult<IReadOnlyList<CalendarEventSite>>(
+            CalendarEventSites.Where(s => eventIds.Contains(s.CalendarEventId)).ToList());
+
+    public Task ReplaceCalendarEventSitesAsync(Guid eventId, IReadOnlyCollection<Guid> siteIds)
+    {
+        CalendarEventSites.RemoveAll(s => s.CalendarEventId == eventId);
+        foreach (var siteId in siteIds.Distinct())
+            CalendarEventSites.Add(new CalendarEventSite { CalendarEventId = eventId, SiteId = siteId });
+        return Task.CompletedTask;
+    }
+
     /// <summary>Roster site pairings, in memory. Composite PK, so no generic repository.</summary>
     public List<RosterAssignmentSite> RosterAssignmentSites { get; } = new();
 

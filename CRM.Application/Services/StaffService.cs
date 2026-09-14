@@ -17,6 +17,9 @@ public class StaffService : IStaffService
     private readonly IFileStorage _files;
     private readonly ILogger<StaffService> _logger;
 
+    /// <summary>How far ahead a renewal shows up as an alert.</summary>
+    public const int TrainingAlertWindowDays = 60;
+
     public StaffService(IUnitOfWork uow, IOrgClock clock, IFileStorage files, ILogger<StaffService> logger)
     {
         _uow = uow;
@@ -36,6 +39,21 @@ public class StaffService : IStaffService
             .GroupBy(a => a.StaffMemberId)
             .ToDictionary(g => g.Key, g => g.Select(a => a.ProgramId).ToList());
 
+        // Renewal alerts: anything dated that comes due within 60 days, or is past due.
+        var today = _clock.Today;
+        var alertsByStaff = (await _uow.OnboardingItems.GetAllAsync(ct))
+            .Where(o => o.ExpiryDate is not null && !o.IsNotApplicable)
+            .Select(o => (o.StaffMemberId, Alert: new TrainingAlertDto
+            {
+                ItemId = o.Id,
+                Label = o.Label,
+                ExpiryDate = o.ExpiryDate!.Value.ToString("yyyy-MM-dd"),
+                DaysUntil = (o.ExpiryDate.Value.Date - today).Days,
+            }))
+            .Where(x => x.Alert.DaysUntil <= TrainingAlertWindowDays)
+            .GroupBy(x => x.StaffMemberId)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.Alert).OrderBy(a => a.DaysUntil).ToList());
+
         return staff.Select(s =>
         {
             var progIds = assignmentsByStaff.GetValueOrDefault(s.Id, new());
@@ -43,7 +61,9 @@ public class StaffService : IStaffService
                 .Select(id => programMap.GetValueOrDefault(id))
                 .OfType<string>()
                 .ToList();
-            return ToSummary(s, progNames);
+            var dto = ToSummary(s, progNames);
+            if (s.EndDate is null) dto.TrainingAlerts = alertsByStaff.GetValueOrDefault(s.Id) ?? new();
+            return dto;
         }).ToList();
     }
 
@@ -84,6 +104,8 @@ public class StaffService : IStaffService
                 IsCompleted = o.IsCompleted,
                 CompletedDate = o.CompletedDate?.ToString("yyyy-MM-dd"),
                 ExpiryDate = o.ExpiryDate?.ToString("yyyy-MM-dd"),
+                RenewalMonths = o.RenewalMonths,
+                IsNotApplicable = o.IsNotApplicable,
                 HasFile = o.BlobName is not null,
                 FileName = o.FileName,
                 ContentType = o.ContentType,
@@ -116,6 +138,7 @@ public class StaffService : IStaffService
                 Section = t.Section,
                 Label = t.Label,
                 SortOrder = t.SortOrder,
+                RenewalMonths = t.RenewalMonths,
             });
 
         await _uow.SaveChangesAsync();
@@ -160,25 +183,42 @@ public class StaffService : IStaffService
         var item = await _uow.OnboardingItems.FirstOrDefaultAsync(o => o.Id == itemId && o.StaffMemberId == staffId);
         if (item is null) return null;
 
+        if (dto.IsNotApplicable.HasValue) item.IsNotApplicable = dto.IsNotApplicable.Value;
+
         item.IsCompleted = dto.IsCompleted;
-        item.CompletedDate = dto.IsCompleted ? (item.CompletedDate ?? _clock.Today) : null;
+        item.CompletedDate = dto.IsCompleted ? (dto.CompletedDate?.Date ?? item.CompletedDate ?? _clock.Today) : null;
+
         if (dto.ExpiryDate.HasValue) item.ExpiryDate = dto.ExpiryDate;
         else if (dto.ClearExpiry) item.ExpiryDate = null;
+        else if (item.RenewalMonths is { } months)
+        {
+            // A renewable item's expiry follows its completion date: TB done 2026-09-14 with
+            // a 48-month interval is due again 2030-09-14. Un-completing it clears the date.
+            item.ExpiryDate = item.IsCompleted && item.CompletedDate is { } done ? done.AddMonths(months) : null;
+        }
         await _uow.OnboardingItems.UpdateAsync(item);
         // Flush before recounting: ListAsync reads AsNoTracking, so an unsaved
         // toggle would come back with its old IsCompleted value.
         await _uow.SaveChangesAsync();
 
-        // Progress % is denormalized on the staff row; keep it in sync.
-        var items = await _uow.OnboardingItems.ListAsync(o => o.StaffMemberId == staffId);
-        member.OnboardingProgressPct = items.Count == 0
-            ? 0
-            : (int)Math.Round(items.Count(o => o.IsCompleted) * 100.0 / items.Count);
-        await _uow.Staff.UpdateAsync(member);
+        await RecomputeProgressAsync(member);
         await _uow.SaveChangesAsync();
 
         return await GetByIdAsync(staffId);
     }
+
+    /// <summary>Progress % is denormalized on the staff row; N/A items count for neither side.</summary>
+    private async Task RecomputeProgressAsync(StaffMember member)
+    {
+        var items = (await _uow.OnboardingItems.ListAsync(o => o.StaffMemberId == member.Id))
+            .Where(o => !o.IsNotApplicable)
+            .ToList();
+        member.OnboardingProgressPct = ProgressPct(items);
+        await _uow.Staff.UpdateAsync(member);
+    }
+
+    internal static int ProgressPct(IReadOnlyCollection<OnboardingItem> counted) =>
+        counted.Count == 0 ? 0 : (int)Math.Round(counted.Count(o => o.IsCompleted) * 100.0 / counted.Count);
 
     // ── Onboarding paperwork ──────────────────────────────────────────────────────
     // Same contract as script PDFs: fresh blob per upload, pointer saved before the previous
@@ -280,7 +320,7 @@ public class StaffService : IStaffService
         var items = await _uow.ChecklistTemplateItems.GetAllAsync();
         return items
             .OrderBy(t => t.SortOrder)
-            .Select(t => new ChecklistTemplateItemDto { Section = t.Section, Label = t.Label })
+            .Select(t => new ChecklistTemplateItemDto { Section = t.Section, Label = t.Label, RenewalMonths = t.RenewalMonths })
             .ToList();
     }
 
@@ -292,16 +332,81 @@ public class StaffService : IStaffService
             await _uow.ChecklistTemplateItems.DeleteAsync(t);
 
         var order = 0;
+        var template = new List<ChecklistTemplateItem>();
         foreach (var i in dto.Items.Where(i => !string.IsNullOrWhiteSpace(i.Label)))
-            await _uow.ChecklistTemplateItems.AddAsync(new ChecklistTemplateItem
+        {
+            var t = new ChecklistTemplateItem
             {
                 Section = string.IsNullOrWhiteSpace(i.Section) ? "General" : i.Section.Trim(),
                 Label = i.Label.Trim(),
                 SortOrder = order++,
-            });
+                RenewalMonths = i.RenewalMonths,
+            };
+            template.Add(t);
+            await _uow.ChecklistTemplateItems.AddAsync(t);
+        }
 
+        await SyncChecklistsAsync(template);
         await _uow.SaveChangesAsync();
         return await GetChecklistTemplateAsync();
+    }
+
+    /// <summary>
+    /// Brings every current staff member's checklist in line with the template ("Edit
+    /// checklist doesn't apply to current teachers" — Sep 2026). Items are matched by
+    /// section + label, case-insensitively. New template items are added unchecked; items
+    /// no longer in the template are removed unless they are completed, marked N/A, or hold
+    /// a file — that is history, not a checklist edit. Former staff are left alone.
+    /// </summary>
+    private async Task SyncChecklistsAsync(IReadOnlyList<ChecklistTemplateItem> template)
+    {
+        static string Key(string section, string label) => $"{section.Trim()}\u001f{label.Trim()}".ToLowerInvariant();
+        var wanted = template.ToDictionary(t => Key(t.Section, t.Label));
+
+        var staff = (await _uow.Staff.GetAllAsync()).Where(s => s.EndDate is null).ToList();
+        var itemsByStaff = (await _uow.OnboardingItems.GetAllAsync())
+            .GroupBy(o => o.StaffMemberId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        foreach (var member in staff)
+        {
+            var mine = itemsByStaff.GetValueOrDefault(member.Id) ?? new List<OnboardingItem>();
+            var byKey = mine.GroupBy(o => Key(o.Section, o.Label)).ToDictionary(g => g.Key, g => g.First());
+            var resulting = new List<OnboardingItem>();
+
+            foreach (var t in template)
+            {
+                if (byKey.TryGetValue(Key(t.Section, t.Label), out var have))
+                {
+                    have.SortOrder = t.SortOrder;
+                    have.RenewalMonths = t.RenewalMonths;
+                    await _uow.OnboardingItems.UpdateAsync(have);
+                    resulting.Add(have);
+                }
+                else
+                {
+                    var added = new OnboardingItem
+                    {
+                        StaffMemberId = member.Id,
+                        Section = t.Section,
+                        Label = t.Label,
+                        SortOrder = t.SortOrder,
+                        RenewalMonths = t.RenewalMonths,
+                    };
+                    await _uow.OnboardingItems.AddAsync(added);
+                    resulting.Add(added);
+                }
+            }
+
+            foreach (var o in mine.Where(o => !wanted.ContainsKey(Key(o.Section, o.Label))))
+            {
+                if (o.IsCompleted || o.IsNotApplicable || o.BlobName is not null) { resulting.Add(o); continue; }
+                await _uow.OnboardingItems.DeleteAsync(o);
+            }
+
+            member.OnboardingProgressPct = ProgressPct(resulting.Where(o => !o.IsNotApplicable).ToList());
+            await _uow.Staff.UpdateAsync(member);
+        }
     }
 
     private static StaffSummaryDto ToSummary(StaffMember s, List<string> programNames) =>

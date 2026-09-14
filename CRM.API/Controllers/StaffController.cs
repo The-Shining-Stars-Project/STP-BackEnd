@@ -27,7 +27,7 @@ public class StaffController : ControllerBase
         // Onboarding completion is admin-only (client rule) — non-admins still get the
         // roster (names/roles/programs) but never anyone's checklist progress.
         if (!User.IsInRole("Admin"))
-            foreach (var s in staff) s.OnboardingProgressPct = 0;
+            foreach (var s in staff) { s.OnboardingProgressPct = 0; s.TrainingAlerts.Clear(); }
         return Ok(staff);
     }
 

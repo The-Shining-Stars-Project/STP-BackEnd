@@ -13,4 +13,5 @@ public class CalendarEvent : BaseEntity
     public bool IsUpcoming { get; set; } = true;
 
     public CrmProgram? Program { get; set; }
+    public ICollection<CalendarEventSite> Sites { get; set; } = new List<CalendarEventSite>();
 }
