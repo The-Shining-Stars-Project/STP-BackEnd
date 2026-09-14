@@ -85,7 +85,8 @@ public class PlanningService : IPlanningService
         Dictionary<Guid, string> Staff,
         Dictionary<Guid, ObjectiveArea> Areas,
         Dictionary<Guid, SubSkill> SubSkills,
-        Dictionary<Guid, PerStarPlan> PlanByParticipant);
+        Dictionary<Guid, PerStarPlan> PlanByParticipant,
+        Dictionary<Guid, Guid> RosterStaffByParticipant);
 
     private async Task<Ctx> LoadContextAsync(string monthKey)
     {
@@ -94,12 +95,31 @@ public class PlanningService : IPlanningService
         var areas = await _uow.ObjectiveAreas.GetAllAsync();
         var subSkills = await _uow.SubSkills.GetAllAsync();
         var plans = await _uow.PerStarPlans.ListAsync(p => p.MonthKey == monthKey);
+
+        // The Roster's quarterly "Assigned staff" is the default for a plan that has not
+        // named anyone yet — teachers expected their roster to carry over here (Sep 2026).
+        var (year, quarter) = QuarterOf(monthKey);
+        var roster = await _uow.RosterAssignments.ListAsync(r => r.Year == year && r.Quarter == quarter);
+        var rosterStaff = roster
+            .Where(r => r.AssignedStaffId is not null)
+            .ToDictionary(r => r.ParticipantId, r => r.AssignedStaffId!.Value);
+
         return new Ctx(
             programs.ToDictionary(p => p.Id),
             staff.ToDictionary(s => s.Id, s => s.FullName),
             areas.ToDictionary(a => a.Id),
             subSkills.ToDictionary(s => s.Id),
-            plans.ToDictionary(p => p.ParticipantId));
+            plans.ToDictionary(p => p.ParticipantId),
+            rosterStaff);
+    }
+
+    /// <summary>"2026-09" → (2026, 3). Anything unparseable falls back to the current quarter.</summary>
+    internal static (int Year, int Quarter) QuarterOf(string monthKey)
+    {
+        if (monthKey.Length >= 7 && int.TryParse(monthKey[..4], out var y) && int.TryParse(monthKey[5..7], out var m) && m is >= 1 and <= 12)
+            return (y, (m - 1) / 3 + 1);
+        var now = DateTime.UtcNow;
+        return (now.Year, (now.Month - 1) / 3 + 1);
     }
 
     private static PerStarPlanDto BuildDto(Participant p, PerStarPlan? plan, string monthKey, Ctx ctx)
@@ -110,17 +130,21 @@ public class PlanningService : IPlanningService
             ParticipantId = p.Id,
             ParticipantName = p.FullName,
             ParticipantInitials = p.Initials,
+            Status = p.Status,
             ProgramId = p.ProgramId,
             ProgramName = program?.Name ?? "",
             ProgramSlug = program?.Slug ?? "",
             MonthKey = monthKey,
         };
 
+        // Plan's own choice first, else the quarter's roster assignment.
+        var staffId = plan?.AssignedStaffId ?? (ctx.RosterStaffByParticipant.TryGetValue(p.Id, out var rs) ? rs : (Guid?)null);
+        dto.AssignedStaffId = staffId;
+        dto.AssignedStaffName = staffId is { } sid ? ctx.Staff.GetValueOrDefault(sid) : null;
+
         if (plan is not null)
         {
             dto.PlanId = plan.Id;
-            dto.AssignedStaffId = plan.AssignedStaffId;
-            dto.AssignedStaffName = plan.AssignedStaffId is { } sid ? ctx.Staff.GetValueOrDefault(sid) : null;
             dto.PrimaryTier = plan.PrimaryTier;
             dto.PriorityObjectiveAreaId = plan.PriorityObjectiveAreaId;
             dto.PriorityObjectiveAreaName = plan.PriorityObjectiveAreaId is { } aid ? ctx.Areas.GetValueOrDefault(aid)?.Name : null;

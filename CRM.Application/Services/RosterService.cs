@@ -129,6 +129,7 @@ public class RosterService : IRosterService
             ParticipantId = p.Id,
             ParticipantName = p.FullName,
             ParticipantInitials = p.Initials,
+            Status = p.Status,
             ProgramId = p.ProgramId,
             ProgramName = program?.Name ?? "",
             ProgramSlug = program?.Slug ?? "",

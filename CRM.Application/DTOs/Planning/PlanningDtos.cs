@@ -7,6 +7,8 @@ public class PerStarPlanDto
 {
     public Guid ParticipantId { get; set; }
     public string ParticipantName { get; set; } = string.Empty;
+    /// <summary>The star's current status, so the page can hide former stars by default.</summary>
+    public CRM.Domain.Enums.ParticipantStatus Status { get; set; }
     public string ParticipantInitials { get; set; } = string.Empty;
     public Guid ProgramId { get; set; }
     public string ProgramName { get; set; } = string.Empty;
