@@ -14,8 +14,11 @@ public class ProgramService : IProgramService
     private readonly IStatsQueries _stats;
     private readonly IOrgClock _clock;
 
-    public ProgramService(IUnitOfWork uow, IStatsQueries stats, IOrgClock clock)
+    private readonly IProgramAccessService _access;
+
+    public ProgramService(IUnitOfWork uow, IStatsQueries stats, IOrgClock clock, IProgramAccessService access)
     {
+        _access = access;
         _uow = uow;
         _stats = stats;
         _clock = clock;
@@ -81,11 +84,16 @@ public class ProgramService : IProgramService
         return all.FirstOrDefault(p => p.Slug == slug);
     }
 
-    public async Task<ProgramDetailDto?> GetDetailAsync(string slug)
+    public async Task<ProgramDetailDto?> GetDetailAsync(Guid userId, string slug)
     {
         var programs = await _uow.Programs.GetAllAsync();
         var program = programs.FirstOrDefault(p => p.Slug == slug);
         if (program is null) return null;
+
+        // Scoped like every other star list (#1). This was the one page that showed a
+        // teacher every program's children — and the only page an unassigned teacher saw
+        // stars on at all, which is how the gap was noticed.
+        (await _access.ForUserAsync(userId)).Require(program.Id);
 
         // Filter in SQL (#11), not after loading the whole table.
         var participants = (await _uow.Participants.ListAsync(p => p.ProgramId == program.Id)).ToList();

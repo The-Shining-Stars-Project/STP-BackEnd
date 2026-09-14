@@ -10,7 +10,8 @@ public interface IProgramService
     Task<IReadOnlyList<ProgramSummaryDto>> GetForUserAsync(Guid userId, CancellationToken ct = default);
 
     Task<ProgramSummaryDto?> GetBySlugAsync(string slug);
-    Task<ProgramDetailDto?> GetDetailAsync(string slug);
+    /// <summary>The program page (roster + staff). Throws <see cref="UnauthorizedAccessException"/> when the caller isn't assigned to it.</summary>
+    Task<ProgramDetailDto?> GetDetailAsync(Guid userId, string slug);
     Task<ProgramSummaryDto> CreateAsync(CreateProgramDto dto);
 
     /// <summary>Updates a program's editable fields by id (slug is immutable). Returns null if not found.</summary>

@@ -35,7 +35,7 @@ public class ProgramsController : ControllerBase
     [HttpGet("{slug}/detail")]
     public async Task<ActionResult<ProgramDetailDto>> GetDetail(string slug)
     {
-        var result = await _service.GetDetailAsync(slug);
+        var result = await _service.GetDetailAsync(User.GetUserId(), slug);
         return result is null ? NotFound() : Ok(result);
     }
 

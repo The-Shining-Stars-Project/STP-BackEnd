@@ -71,6 +71,7 @@ public class ProgramScopingTests
     private ArtsProfileService ArtsProfile() => new(_uow, _access);
     private RosterService Roster() => new(_uow, _access);
     private PlanningService Planning() => new(_uow, _access);
+    private ProgramService Programs() => new(_uow, new FakeStatsQueries(), new FakeOrgClock(), _access);
 
     // ── The scope primitive ─────────────────────────────────────────────────────
 
@@ -194,6 +195,30 @@ public class ProgramScopingTests
     {
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
             () => Participants().DeleteAsync(TeacherAUser, ChildInB));
+    }
+
+    // ── Program page ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Opening_another_programs_page_is_forbidden()
+    {
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => Programs().GetDetailAsync(TeacherAUser, "program-b"));
+    }
+
+    [Fact]
+    public async Task Opening_your_own_programs_page_lists_its_children()
+    {
+        var detail = await Programs().GetDetailAsync(TeacherAUser, "program-a");
+
+        Assert.NotNull(detail);
+        Assert.Equal([ChildInA], detail!.Participants.Select(p => p.Id).ToArray());
+    }
+
+    [Fact]
+    public async Task Admins_open_any_program_page()
+    {
+        Assert.NotNull(await Programs().GetDetailAsync(AdminUser, "program-b"));
     }
 
     // ── Progress tracking — the write paths that were fully open ────────────────
