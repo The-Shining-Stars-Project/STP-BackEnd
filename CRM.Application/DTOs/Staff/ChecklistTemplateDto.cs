@@ -4,6 +4,8 @@ namespace CRM.Application.DTOs.Staff;
 
 public class ChecklistTemplateItemDto
 {
+    /// <summary>Stable id of an existing template row. Sent back on save so a relabelled item stays the same item; null for a new one.</summary>
+    public Guid? Id { get; set; }
     public string Section { get; set; } = string.Empty;
     public string Label { get; set; } = string.Empty;
     /// <summary>Renewal interval in months for items that expire (TB 48, CPR 24, harassment 24); null for one-time items.</summary>

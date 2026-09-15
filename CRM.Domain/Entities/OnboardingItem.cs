@@ -15,6 +15,9 @@ public class OnboardingItem : BaseEntity
     /// <summary>Copied from the template item; expiry = completion + this many months.</summary>
     public int? RenewalMonths { get; set; }
 
+    /// <summary>The template row this item was issued from; lets a template rename reach existing checklists.</summary>
+    public Guid? TemplateItemId { get; set; }
+
     /// <summary>Not required for this person (e.g. fingerprinting for someone never at a school site). Excluded from progress and alerts.</summary>
     public bool IsNotApplicable { get; set; }
 

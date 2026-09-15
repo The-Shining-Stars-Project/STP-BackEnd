@@ -79,6 +79,28 @@ public class ChecklistAndCalendarTests
         Assert.Equal(48, item.RenewalMonths);
     }
 
+    [Fact]
+    public async Task Renaming_a_template_item_renames_it_on_issued_checklists_instead_of_duplicating()
+    {
+        await SetTemplateAsync(("Documents", "Fingerprinting & TB Clearances (Schools)", 48));
+        var id = await HireAsync("Ana Lee");
+        var before = (await _staff.GetByIdAsync(id))!.OnboardingItems.Single();
+        await _staff.SetOnboardingItemAsync(id, before.Id, new SetOnboardingItemDto { IsCompleted = true });
+
+        var current = await _staff.GetChecklistTemplateAsync();
+        await _staff.UpdateChecklistTemplateAsync(new UpdateChecklistTemplateDto
+        {
+            Items = [new ChecklistTemplateItemDto { Id = current.Single().Id, Section = "Documents", Label = "Fingerprinting (Schools)", RenewalMonths = null }],
+        });
+
+        var after = (await _staff.GetByIdAsync(id))!.OnboardingItems;
+        var item = Assert.Single(after);
+        Assert.Equal("Fingerprinting (Schools)", item.Label);
+        Assert.True(item.IsCompleted);          // history kept
+        Assert.Null(item.RenewalMonths);
+        Assert.Equal(before.Id, item.Id);       // same row, not a replacement
+    }
+
     // ── Renewals + N/A ──────────────────────────────────────────────────────────
 
     [Fact]

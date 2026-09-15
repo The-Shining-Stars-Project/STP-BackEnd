@@ -139,6 +139,7 @@ public class StaffService : IStaffService
                 Label = t.Label,
                 SortOrder = t.SortOrder,
                 RenewalMonths = t.RenewalMonths,
+                TemplateItemId = t.Id,
             });
 
         await _uow.SaveChangesAsync();
@@ -320,31 +321,41 @@ public class StaffService : IStaffService
         var items = await _uow.ChecklistTemplateItems.GetAllAsync();
         return items
             .OrderBy(t => t.SortOrder)
-            .Select(t => new ChecklistTemplateItemDto { Section = t.Section, Label = t.Label, RenewalMonths = t.RenewalMonths })
+            .Select(t => new ChecklistTemplateItemDto { Id = t.Id, Section = t.Section, Label = t.Label, RenewalMonths = t.RenewalMonths })
             .ToList();
     }
 
     public async Task<IReadOnlyList<ChecklistTemplateItemDto>> UpdateChecklistTemplateAsync(UpdateChecklistTemplateDto dto)
     {
-        // Replace-all: the template is a small ordered list, not per-row edited.
-        var existing = await _uow.ChecklistTemplateItems.GetAllAsync();
-        foreach (var t in existing)
-            await _uow.ChecklistTemplateItems.DeleteAsync(t);
-
+        // Upsert by id: a row the editor sends back with its id is the same item (so a
+        // relabelled "TB & fingerprinting" stays one item on every checklist rather than
+        // becoming a new one beside the old); rows it does not send back are removed.
+        var existing = (await _uow.ChecklistTemplateItems.GetAllAsync()).ToDictionary(t => t.Id);
+        var seen = new HashSet<Guid>();
         var order = 0;
         var template = new List<ChecklistTemplateItem>();
         foreach (var i in dto.Items.Where(i => !string.IsNullOrWhiteSpace(i.Label)))
         {
-            var t = new ChecklistTemplateItem
+            var section = string.IsNullOrWhiteSpace(i.Section) ? "General" : i.Section.Trim();
+            var label = i.Label.Trim();
+            if (i.Id is { } id && existing.TryGetValue(id, out var row) && seen.Add(id))
             {
-                Section = string.IsNullOrWhiteSpace(i.Section) ? "General" : i.Section.Trim(),
-                Label = i.Label.Trim(),
-                SortOrder = order++,
-                RenewalMonths = i.RenewalMonths,
-            };
-            template.Add(t);
-            await _uow.ChecklistTemplateItems.AddAsync(t);
+                row.Section = section;
+                row.Label = label;
+                row.SortOrder = order++;
+                row.RenewalMonths = i.RenewalMonths;
+                await _uow.ChecklistTemplateItems.UpdateAsync(row);
+                template.Add(row);
+            }
+            else
+            {
+                var t = new ChecklistTemplateItem { Section = section, Label = label, SortOrder = order++, RenewalMonths = i.RenewalMonths };
+                template.Add(t);
+                await _uow.ChecklistTemplateItems.AddAsync(t);
+            }
         }
+        foreach (var gone in existing.Values.Where(t => !seen.Contains(t.Id)))
+            await _uow.ChecklistTemplateItems.DeleteAsync(gone);
 
         await SyncChecklistsAsync(template);
         await _uow.SaveChangesAsync();
@@ -368,18 +379,28 @@ public class StaffService : IStaffService
             .GroupBy(o => o.StaffMemberId)
             .ToDictionary(g => g.Key, g => g.ToList());
 
+        var templateIds = template.Select(t => t.Id).ToHashSet();
+
         foreach (var member in staff)
         {
             var mine = itemsByStaff.GetValueOrDefault(member.Id) ?? new List<OnboardingItem>();
+            var byTemplateId = mine.Where(o => o.TemplateItemId is not null).GroupBy(o => o.TemplateItemId!.Value).ToDictionary(g => g.Key, g => g.First());
             var byKey = mine.GroupBy(o => Key(o.Section, o.Label)).ToDictionary(g => g.Key, g => g.First());
             var resulting = new List<OnboardingItem>();
+            var matched = new HashSet<Guid>();
 
             foreach (var t in template)
             {
-                if (byKey.TryGetValue(Key(t.Section, t.Label), out var have))
+                // The issued row is found by template id first (a rename still matches),
+                // then by section + label for rows issued before ids were recorded.
+                var have = byTemplateId.GetValueOrDefault(t.Id) ?? byKey.GetValueOrDefault(Key(t.Section, t.Label));
+                if (have is not null && matched.Add(have.Id))
                 {
+                    have.Section = t.Section;
+                    have.Label = t.Label;
                     have.SortOrder = t.SortOrder;
                     have.RenewalMonths = t.RenewalMonths;
+                    have.TemplateItemId = t.Id;
                     await _uow.OnboardingItems.UpdateAsync(have);
                     resulting.Add(have);
                 }
@@ -392,15 +413,17 @@ public class StaffService : IStaffService
                         Label = t.Label,
                         SortOrder = t.SortOrder,
                         RenewalMonths = t.RenewalMonths,
+                        TemplateItemId = t.Id,
                     };
                     await _uow.OnboardingItems.AddAsync(added);
                     resulting.Add(added);
                 }
             }
 
-            foreach (var o in mine.Where(o => !wanted.ContainsKey(Key(o.Section, o.Label))))
+            foreach (var o in mine.Where(o => !matched.Contains(o.Id)))
             {
-                if (o.IsCompleted || o.IsNotApplicable || o.BlobName is not null) { resulting.Add(o); continue; }
+                var stillInTemplate = (o.TemplateItemId is { } tid && templateIds.Contains(tid)) || wanted.ContainsKey(Key(o.Section, o.Label));
+                if (stillInTemplate || o.IsCompleted || o.IsNotApplicable || o.BlobName is not null) { resulting.Add(o); continue; }
                 await _uow.OnboardingItems.DeleteAsync(o);
             }
 
