@@ -94,6 +94,21 @@ public class StarLifecycleTests
         Assert.Equal("2026-01-05", updated!.StartDate);
     }
 
+    // ── Preferred name ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Preferred_name_is_set_trimmed_and_cleared_by_an_empty_string()
+    {
+        var set = await _participants.UpdateAsync(AdminUser, Star, new UpdateParticipantDto { PreferredName = "  JJ " });
+        Assert.Equal("JJ", set!.PreferredName);
+
+        var unchanged = await _participants.UpdateAsync(AdminUser, Star, new UpdateParticipantDto { FullName = "Child In A" });
+        Assert.Equal("JJ", unchanged!.PreferredName);
+
+        var cleared = await _participants.UpdateAsync(AdminUser, Star, new UpdateParticipantDto { PreferredName = "" });
+        Assert.Null(cleared!.PreferredName);
+    }
+
     // ── Emergency contacts ──────────────────────────────────────────────────────
 
     [Fact]

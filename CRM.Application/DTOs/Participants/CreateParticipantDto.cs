@@ -22,6 +22,9 @@ public class CreateParticipantDto
     [StringLength(10, MinimumLength = 1)]
     public string Initials { get; set; } = string.Empty;
 
+    [StringLength(100)]
+    public string? PreferredName { get; set; }
+
     [Required]
     public Guid ProgramId { get; set; }
 
@@ -98,6 +101,10 @@ public class UpdateParticipantDto
 
     [StringLength(10, MinimumLength = 1)]
     public string? Initials { get; set; }
+
+    /// <summary>Empty string clears it; null means unchanged.</summary>
+    [StringLength(100)]
+    public string? PreferredName { get; set; }
 
     public Guid? ProgramId { get; set; }
     public ParticipantStatus? Status { get; set; }

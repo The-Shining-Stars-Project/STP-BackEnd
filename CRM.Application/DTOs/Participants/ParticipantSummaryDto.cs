@@ -6,6 +6,8 @@ public class ParticipantSummaryDto
 {
     public Guid Id { get; set; }
     public string FullName { get; set; } = string.Empty;
+    /// <summary>Preferred / class name, when it differs from the full name.</summary>
+    public string? PreferredName { get; set; }
     public string Initials { get; set; } = string.Empty;
     public ParticipantStatus Status { get; set; }
     public Guid ProgramId { get; set; }

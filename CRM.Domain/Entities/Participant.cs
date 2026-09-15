@@ -6,6 +6,8 @@ namespace CRM.Domain.Entities;
 public class Participant : BaseEntity
 {
     public string FullName { get; set; } = string.Empty;
+    /// <summary>What the star goes by in class when it differs from the legal name ("JJ" for Jordan). Shown beside the full name.</summary>
+    public string? PreferredName { get; set; }
     public string Initials { get; set; } = string.Empty;
     public int? BirthYear { get; set; }
     public ParticipantStatus Status { get; set; } = ParticipantStatus.Active;

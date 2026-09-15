@@ -60,6 +60,7 @@ public class ParticipantService : IParticipantService
         {
             Id = p.Id,
             FullName = p.FullName,
+            PreferredName = p.PreferredName,
             Initials = p.Initials,
             Status = p.Status,
             ProgramId = p.ProgramId,
@@ -109,6 +110,7 @@ public class ParticipantService : IParticipantService
         var participant = new Participant
         {
             FullName = dto.FullName,
+            PreferredName = string.IsNullOrWhiteSpace(dto.PreferredName) ? null : dto.PreferredName.Trim(),
             Initials = dto.Initials,
             ProgramId = dto.ProgramId,
             Status = dto.Status,
@@ -162,6 +164,7 @@ public class ParticipantService : IParticipantService
 
         if (dto.FullName is not null) participant.FullName = dto.FullName;
         if (dto.Initials is not null) participant.Initials = dto.Initials;
+        if (dto.PreferredName is not null) participant.PreferredName = string.IsNullOrWhiteSpace(dto.PreferredName) ? null : dto.PreferredName.Trim();
         if (dto.ProgramId.HasValue) participant.ProgramId = dto.ProgramId.Value;
         if (dto.Status.HasValue) participant.Status = dto.Status.Value;
         if (dto.BirthYear.HasValue) participant.BirthYear = dto.BirthYear;
@@ -274,6 +277,7 @@ public class ParticipantService : IParticipantService
         {
             Id = p.Id,
             FullName = p.FullName,
+            PreferredName = p.PreferredName,
             Initials = p.Initials,
             Status = p.Status,
             ProgramId = p.ProgramId,

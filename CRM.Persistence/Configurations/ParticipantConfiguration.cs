@@ -10,6 +10,7 @@ public class ParticipantConfiguration : IEntityTypeConfiguration<Participant>
     {
         builder.HasKey(p => p.Id);
         builder.Property(p => p.FullName).IsRequired().HasMaxLength(200);
+        builder.Property(p => p.PreferredName).HasMaxLength(100);
         builder.Property(p => p.Initials).IsRequired().HasMaxLength(5);
         builder.Property(p => p.ServiceCoordinator).HasMaxLength(200);
         builder.Property(p => p.GuardianName).HasMaxLength(200);
