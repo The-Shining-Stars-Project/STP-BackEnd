@@ -46,4 +46,10 @@ public interface IEventAttendanceService
     Task<bool> UpdateRecordAsync(Guid userId, Guid recordId, UpdateEventRecordDto dto);
 
     Task<EventSessionSummaryDto?> SubmitAsync(Guid userId, Guid eventSessionId);
+
+    /// <summary>Puts a submitted register back to Open so marks can be corrected. Null if it doesn't exist.</summary>
+    Task<EventSessionSummaryDto?> ReopenAsync(Guid userId, Guid eventSessionId);
+
+    /// <summary>Removes an event and its attendance marks outright (an event created by mistake). False if it doesn't exist.</summary>
+    Task<bool> DeleteAsync(Guid userId, Guid eventSessionId);
 }

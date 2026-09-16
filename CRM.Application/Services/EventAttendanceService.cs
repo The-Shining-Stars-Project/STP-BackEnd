@@ -274,6 +274,41 @@ public class EventAttendanceService : IEventAttendanceService
         return await ToSummaryAsync(ev, records, await SiteNameMapAsync());
     }
 
+    /// <summary>
+    /// "Hit submit too early" (client, Sep 2026): a submitted register can be reopened by
+    /// management, marks corrected, and submitted again. Audited, so the reopen is on record.
+    /// </summary>
+    public async Task<EventSessionSummaryDto?> ReopenAsync(Guid userId, Guid eventSessionId)
+    {
+        var ev = await _uow.EventSessions.GetByIdAsync(eventSessionId);
+        if (ev is null) return null;
+
+        ev.Status = SessionStatus.Open;
+        ev.SubmittedAt = null;
+        await _uow.EventSessions.UpdateAsync(ev);
+        await _uow.SaveChangesAsync();
+
+        var records = await _uow.EventAttendanceRecords.ListAsync(r => r.EventSessionId == ev.Id);
+        return await ToSummaryAsync(ev, records, await SiteNameMapAsync());
+    }
+
+    /// <summary>
+    /// Hard delete: the attendance records and site links cascade with the event. This is
+    /// for an event that should never have existed; a wrongly submitted one is reopened.
+    /// </summary>
+    public async Task<bool> DeleteAsync(Guid userId, Guid eventSessionId)
+    {
+        var ev = await _uow.EventSessions.GetByIdAsync(eventSessionId);
+        if (ev is null) return false;
+
+        // The fakes and any non-cascading store: drop the marks explicitly too.
+        foreach (var r in await _uow.EventAttendanceRecords.ListAsync(r => r.EventSessionId == ev.Id))
+            await _uow.EventAttendanceRecords.DeleteAsync(r);
+        await _uow.EventSessions.DeleteAsync(ev);
+        await _uow.SaveChangesAsync();
+        return true;
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
     /// <summary>Participant ids the caller may see: everyone for an admin, else their programmes'.</summary>

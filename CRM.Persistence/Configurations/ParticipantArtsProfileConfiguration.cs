@@ -9,9 +9,11 @@ public class ParticipantArtsProfileConfiguration : IEntityTypeConfiguration<Part
     public void Configure(EntityTypeBuilder<ParticipantArtsProfile> builder)
     {
         builder.HasKey(a => a.Id);
-        builder.Property(a => a.IppSummary).HasMaxLength(2000);
-        builder.Property(a => a.CurrentLevel).HasMaxLength(2000);
-        builder.Property(a => a.TsspArtsGoal).HasMaxLength(2000);
+        // Free-form narrative — an IPP summary pasted from the regional-center document runs
+        // well past 2,000 characters, and the old cap failed the save with a generic error.
+        builder.Property(a => a.IppSummary);
+        builder.Property(a => a.CurrentLevel);
+        builder.Property(a => a.TsspArtsGoal);
 
         // One profile per participant.
         builder.HasIndex(a => a.ParticipantId).IsUnique();

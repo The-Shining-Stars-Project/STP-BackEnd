@@ -219,6 +219,37 @@ public class EventAttendanceTests
     }
 
     [Fact]
+    public async Task A_submitted_register_can_be_reopened_and_marked_again()
+    {
+        var ev = await NewEvent(SiteA);
+        await _service.AddParticipantsAsync(AdminUser, ev.Id, new AddEventParticipantsDto
+        { ParticipantIds = [_pathwaysStar] });
+        var roster = await _service.GetRosterAsync(AdminUser, ev.Id);
+        await _service.SubmitAsync(AdminUser, ev.Id);
+
+        var reopened = await _service.ReopenAsync(AdminUser, ev.Id);
+        Assert.Equal(SessionStatus.Open, reopened!.Status);
+
+        Assert.True(await _service.UpdateRecordAsync(AdminUser, roster!.Entries[0].RecordId,
+            new UpdateEventRecordDto { Status = AttendanceStatus.Absent }));
+        Assert.Equal(SessionStatus.Submitted, (await _service.SubmitAsync(AdminUser, ev.Id))!.Status);
+    }
+
+    [Fact]
+    public async Task Deleting_an_event_removes_it_and_its_marks()
+    {
+        var ev = await NewEvent(SiteA);
+        await _service.AddParticipantsAsync(AdminUser, ev.Id, new AddEventParticipantsDto
+        { ParticipantIds = [_pathwaysStar] });
+
+        Assert.True(await _service.DeleteAsync(AdminUser, ev.Id));
+
+        Assert.Null(await _service.GetRosterAsync(AdminUser, ev.Id));
+        Assert.Empty(_uow.EventAttendanceRecordsRepo.Items.Where(r => r.EventSessionId == ev.Id));
+        Assert.False(await _service.DeleteAsync(AdminUser, ev.Id));
+    }
+
+    [Fact]
     public async Task A_marked_star_cannot_be_removed_until_unmarked()
     {
         var ev = await NewEvent(SiteA);

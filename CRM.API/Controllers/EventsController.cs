@@ -136,6 +136,23 @@ public class EventsController : ControllerBase
         catch (InvalidOperationException ex) { return Conflict(new { message = ex.Message }); }
     }
 
+    /// <summary>Reopens a submitted register so marks can be corrected. Management only; audited.</summary>
+    [HttpPost("{id:guid}/reopen")]
+    [Authorize(Policy = "ManagementWrite")]
+    [Audited("event.reopen", "EventSession")]
+    public async Task<ActionResult<EventSessionSummaryDto>> Reopen(Guid id)
+    {
+        var reopened = await _service.ReopenAsync(User.GetUserId(), id);
+        return reopened is null ? NotFound() : Ok(reopened);
+    }
+
+    /// <summary>Deletes an event and its marks. Admin only — this erases attendance history for the event.</summary>
+    [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "Admin")]
+    [Audited("event.delete", "EventSession")]
+    public async Task<IActionResult> Delete(Guid id) =>
+        await _service.DeleteAsync(User.GetUserId(), id) ? NoContent() : NotFound();
+
     [HttpPost("{id:guid}/submit")]
     [Authorize(Policy = "ManagementWrite")]
     [Audited("event.submit", "EventSession")]

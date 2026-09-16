@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 namespace CRM.Application.DTOs.Participants;
 
 public class ParticipantArtsProfileDto
@@ -12,7 +13,10 @@ public class ParticipantArtsProfileDto
 
 public class UpsertArtsProfileDto
 {
+    [StringLength(ParticipantLimits.IntakeNotesMax)]
     public string? IppSummary { get; set; }
+    [StringLength(ParticipantLimits.IntakeNotesMax)]
     public string? CurrentLevel { get; set; }
+    [StringLength(ParticipantLimits.IntakeNotesMax)]
     public string? TsspArtsGoal { get; set; }
 }
