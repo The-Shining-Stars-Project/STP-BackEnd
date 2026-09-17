@@ -255,6 +255,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("ManagementWrite", policy => policy.RequireAssertion(ctx =>
         ctx.User.IsInRole("Admin")
         || ctx.User.HasClaim("staffRole", "Coordinator")
+        || ctx.User.HasClaim("staffRole", "TechnologySystemsCoordinator")
         || ctx.User.HasClaim("staffRole", "Admin")));
 
     // There is deliberately NO MFA requirement here, and adding one would create a gate with a

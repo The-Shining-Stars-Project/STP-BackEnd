@@ -30,6 +30,7 @@ public class UpdateStaffDto
     public string? Initials { get; set; }
 
     public StaffRole? Role { get; set; }
+    public DateTime? StartDate { get; set; }
     public List<Guid>? ProgramIds { get; set; }
 
     /// <summary>Sets the leaving date, marking the member as former.</summary>

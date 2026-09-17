@@ -166,6 +166,7 @@ public class StaffService : IStaffService
         if (dto.FullName is not null) member.FullName = dto.FullName;
         if (dto.Initials is not null) member.Initials = dto.Initials;
         if (dto.Role.HasValue) member.Role = dto.Role.Value;
+        if (dto.StartDate.HasValue) member.StartDate = dto.StartDate.Value.Date;
         if (dto.EndDate.HasValue) member.EndDate = dto.EndDate;
         else if (dto.ClearEndDate) member.EndDate = null;
         if (dto.TShirtSize is not null) member.TShirtSize = dto.TShirtSize;
