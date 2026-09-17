@@ -92,6 +92,7 @@ public class ParticipantService : IParticipantService
             IsSdpClient = p.IsSdpClient,
             SdpFmsName = p.SdpFmsName,
             SdpIndependentFacilitator = p.SdpIndependentFacilitator,
+            SdpIndependentFacilitatorEmail = p.SdpIndependentFacilitatorEmail,
             SdpStartDate = p.SdpStartDate?.ToString("yyyy-MM-dd"),
             SecondaryProgramId = p.SecondaryProgramId,
             SecondaryProgramName = secondary?.Name,
@@ -138,6 +139,7 @@ public class ParticipantService : IParticipantService
             IsSdpClient = dto.IsSdpClient,
             SdpFmsName = dto.SdpFmsName,
             SdpIndependentFacilitator = dto.SdpIndependentFacilitator,
+            SdpIndependentFacilitatorEmail = dto.SdpIndependentFacilitatorEmail,
             SdpStartDate = dto.SdpStartDate,
             SecondaryProgramId = dto.SecondaryProgramId,
         };
@@ -180,6 +182,7 @@ public class ParticipantService : IParticipantService
         if (dto.IsSdpClient.HasValue) participant.IsSdpClient = dto.IsSdpClient;
         if (dto.SdpFmsName is not null) participant.SdpFmsName = dto.SdpFmsName;
         if (dto.SdpIndependentFacilitator is not null) participant.SdpIndependentFacilitator = dto.SdpIndependentFacilitator;
+        if (dto.SdpIndependentFacilitatorEmail is not null) participant.SdpIndependentFacilitatorEmail = dto.SdpIndependentFacilitatorEmail;
         if (dto.SdpStartDate.HasValue) participant.SdpStartDate = dto.SdpStartDate;
         else if (dto.ClearSdpStartDate) participant.SdpStartDate = null;
         if (dto.AuthorizationExpiry.HasValue) participant.AuthorizationExpiry = dto.AuthorizationExpiry;
@@ -309,6 +312,7 @@ public class ParticipantService : IParticipantService
             IsSdpClient = p.IsSdpClient,
             SdpFmsName = p.SdpFmsName,
             SdpIndependentFacilitator = p.SdpIndependentFacilitator,
+            SdpIndependentFacilitatorEmail = p.SdpIndependentFacilitatorEmail,
             SdpStartDate = p.SdpStartDate?.ToString("yyyy-MM-dd"),
             SecondaryProgramId = p.SecondaryProgramId,
             SecondaryProgramName = p.SecondaryProgramId is { } sid2 ? programMap.GetValueOrDefault(sid2) : null,

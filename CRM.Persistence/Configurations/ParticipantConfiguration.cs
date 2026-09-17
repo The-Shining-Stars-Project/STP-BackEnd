@@ -23,6 +23,7 @@ public class ParticipantConfiguration : IEntityTypeConfiguration<Participant>
         builder.Property(p => p.EmergencyContacts).HasMaxLength(2000);
         builder.Property(p => p.SdpFmsName).HasMaxLength(200);
         builder.Property(p => p.SdpIndependentFacilitator).HasMaxLength(200);
+        builder.Property(p => p.SdpIndependentFacilitatorEmail).HasMaxLength(200);
         builder.Property(p => p.Allergies).HasMaxLength(500);
         builder.Property(p => p.AreasOfConcern).HasMaxLength(1000);
         builder.Property(p => p.ServiceCoordinatorEmail).HasMaxLength(200);

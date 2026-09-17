@@ -51,6 +51,7 @@ public class ParticipantSummaryDto
     public bool? IsSdpClient { get; set; }
     public string? SdpFmsName { get; set; }
     public string? SdpIndependentFacilitator { get; set; }
+    public string? SdpIndependentFacilitatorEmail { get; set; }
     /// <summary>yyyy-MM-dd, null when not set. Always the first of a month by policy.</summary>
     public string? SdpStartDate { get; set; }
 

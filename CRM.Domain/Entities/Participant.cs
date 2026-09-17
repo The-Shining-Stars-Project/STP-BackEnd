@@ -52,6 +52,7 @@ public class Participant : BaseEntity
     public bool? IsSdpClient { get; set; }
     public string? SdpFmsName { get; set; }
     public string? SdpIndependentFacilitator { get; set; }
+    public string? SdpIndependentFacilitatorEmail { get; set; }
     public DateTime? SdpStartDate { get; set; }
 
     /// <summary>

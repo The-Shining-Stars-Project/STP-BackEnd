@@ -70,6 +70,8 @@ public class CreateParticipantDto
     public string? SdpFmsName { get; set; }
     [StringLength(200)]
     public string? SdpIndependentFacilitator { get; set; }
+    [StringLength(200)]
+    public string? SdpIndependentFacilitatorEmail { get; set; }
     public DateTime? SdpStartDate { get; set; }
 
     [StringLength(500)]
@@ -147,6 +149,8 @@ public class UpdateParticipantDto
     public string? SdpFmsName { get; set; }
     [StringLength(200)]
     public string? SdpIndependentFacilitator { get; set; }
+    [StringLength(200)]
+    public string? SdpIndependentFacilitatorEmail { get; set; }
     public DateTime? SdpStartDate { get; set; }
     public bool ClearSdpStartDate { get; set; }
 
