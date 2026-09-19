@@ -60,6 +60,8 @@ public class AttendanceSummaryDto
     public int Present { get; set; }
     public int Absent { get; set; }
     public int Unmarked { get; set; }
+    public int Rescheduled { get; set; }
+    public int NotScheduled { get; set; }
     /// <summary>Present / (Present + Absent), as a whole percent.</summary>
     public int PresentRatePct { get; set; }
 }

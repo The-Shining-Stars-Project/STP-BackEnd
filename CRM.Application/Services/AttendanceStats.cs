@@ -18,8 +18,9 @@ namespace CRM.Application.Services;
 public static class AttendanceStats
 {
     /// <summary>
-    /// Attendance % for one participant = Present / (Present + Absent) across marked records.
-    /// Unmarked records are ignored. Returns 0 when there are no marked records.
+    /// Attendance % for one participant = Present / (Present + Absent). Unmarked, Rescheduled
+    /// and NotScheduled records are ignored — the last two are deliberate answers, but not
+    /// about whether the child showed up. Returns 0 when nothing counts.
     /// </summary>
     public static int PercentFor(IEnumerable<AttendanceRecord> records)
     {

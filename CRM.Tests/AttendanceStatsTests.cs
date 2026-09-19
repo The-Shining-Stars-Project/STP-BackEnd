@@ -31,6 +31,24 @@ public class AttendanceStatsTests
     }
 
     [Fact]
+    public void PercentFor_RescheduledAndNotScheduled_AreExcludedFromTheRate()
+    {
+        // 1 present, 1 absent, plus two records that say nothing about showing up → 50%, not 25%.
+        var records = new[]
+        {
+            Record(AttendanceStatus.Present), Record(AttendanceStatus.Absent),
+            Record(AttendanceStatus.Rescheduled), Record(AttendanceStatus.NotScheduled),
+        };
+        Assert.Equal(50, AttendanceStats.PercentFor(records));
+    }
+
+    [Fact]
+    public void PercentFor_OnlyRescheduled_ReturnsZero_NotAnError()
+    {
+        Assert.Equal(0, AttendanceStats.PercentFor([Record(AttendanceStatus.Rescheduled)]));
+    }
+
+    [Fact]
     public void PercentFor_AllAbsent_ReturnsZero()
     {
         var records = new[] { Record(AttendanceStatus.Absent), Record(AttendanceStatus.Absent) };

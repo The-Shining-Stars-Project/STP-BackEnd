@@ -7,7 +7,7 @@ namespace CRM.Application.Interfaces;
 public record ParticipantAttendanceAgg(Guid ParticipantId, Guid ProgramId, int PresentCount, int AbsentCount);
 
 /// <summary>Whole-ledger attendance counts, aggregated in SQL.</summary>
-public record AttendanceStatusTotals(int Present, int Absent, int Unmarked, int SessionCount);
+public record AttendanceStatusTotals(int Present, int Absent, int Unmarked, int SessionCount, int Rescheduled = 0, int NotScheduled = 0);
 
 /// <summary>A program's next upcoming session (date + room only).</summary>
 public record NextSessionStub(Guid ProgramId, DateTime Date, string? Room);

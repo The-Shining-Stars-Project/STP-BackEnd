@@ -47,7 +47,9 @@ public class StatsQueries : IStatsQueries
             Of(AttendanceStatus.Present),
             Of(AttendanceStatus.Absent),
             Of(AttendanceStatus.Unmarked),
-            sessionCount);
+            sessionCount,
+            Of(AttendanceStatus.Rescheduled),
+            Of(AttendanceStatus.NotScheduled));
     }
 
     public async Task<IReadOnlyDictionary<Guid, int>> GetSessionCountByProgramAsync(CancellationToken ct = default)

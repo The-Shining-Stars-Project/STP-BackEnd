@@ -2,6 +2,7 @@ using CRM.API.Auditing;
 using CRM.Application.DTOs.Events;
 using CRM.Application.Interfaces;
 using CRM.Application.Interfaces.Services;
+using CRM.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -25,11 +26,20 @@ public class EventsController : ControllerBase
 {
     private readonly IEventAttendanceService _service;
     private readonly IOrgClock _clock;
+    private readonly IAuthorizationService _auth;
 
-    public EventsController(IEventAttendanceService service, IOrgClock clock)
+    public EventsController(IEventAttendanceService service, IOrgClock clock, IAuthorizationService auth)
     {
         _service = service;
         _clock = clock;
+        _auth = auth;
+    }
+
+    /// <summary>Rescheduled / Not scheduled are management calls (client rule, Sep 2026); teachers keep Present / Absent.</summary>
+    private async Task<bool> MayUseAsync(AttendanceStatus status)
+    {
+        if (status is not (AttendanceStatus.Rescheduled or AttendanceStatus.NotScheduled)) return true;
+        return (await _auth.AuthorizeAsync(User, null, "ManagementWrite")).Succeeded;
     }
 
     /// <summary>Events in a date range, defaulting to the current month.</summary>
@@ -127,6 +137,8 @@ public class EventsController : ControllerBase
     [Audited("event.record.update", "EventAttendanceRecord")]
     public async Task<IActionResult> UpdateRecord(Guid recordId, [FromBody] UpdateEventRecordDto dto)
     {
+        if (!await MayUseAsync(dto.Status))
+            return StatusCode(403, new { message = "Only coordinators and admins can mark a star Rescheduled or Not scheduled." });
         try
         {
             var ok = await _service.UpdateRecordAsync(User.GetUserId(), recordId, dto);

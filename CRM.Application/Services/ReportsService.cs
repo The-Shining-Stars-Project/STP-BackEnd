@@ -113,6 +113,8 @@ public class ReportsService : IReportsService
                 Present = attendanceTotals.Present,
                 Absent = attendanceTotals.Absent,
                 Unmarked = attendanceTotals.Unmarked,
+                Rescheduled = attendanceTotals.Rescheduled,
+                NotScheduled = attendanceTotals.NotScheduled,
                 PresentRatePct = AttendanceStats.Percent(
                     attendanceTotals.Present, attendanceTotals.Present + attendanceTotals.Absent),
             },

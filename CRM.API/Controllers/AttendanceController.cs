@@ -3,6 +3,7 @@ using CRM.Application.DTOs.Attendance;
 using CRM.Application.Interfaces;
 using CRM.Application.Interfaces.Services;
 using CRM.API.Auditing;
+using CRM.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -15,11 +16,20 @@ public class AttendanceController : ControllerBase
 {
     private readonly IAttendanceService _service;
     private readonly IOrgClock _clock;
+    private readonly IAuthorizationService _auth;
 
-    public AttendanceController(IAttendanceService service, IOrgClock clock)
+    public AttendanceController(IAttendanceService service, IOrgClock clock, IAuthorizationService auth)
     {
         _service = service;
         _clock = clock;
+        _auth = auth;
+    }
+
+    /// <summary>Rescheduled / Not scheduled are management calls (client rule, Sep 2026); teachers keep Present / Absent.</summary>
+    private async Task<bool> MayUseAsync(AttendanceStatus status)
+    {
+        if (status is not (AttendanceStatus.Rescheduled or AttendanceStatus.NotScheduled)) return true;
+        return (await _auth.AuthorizeAsync(User, null, "ManagementWrite")).Succeeded;
     }
 
     // GET today was removed (#2): it returned every program's participants to any signed-in
@@ -126,6 +136,8 @@ public class AttendanceController : ControllerBase
     [Audited("attendance.record.update", "AttendanceRecord")]
     public async Task<IActionResult> UpdateRecord(Guid recordId, [FromBody] UpdateAttendanceDto dto)
     {
+        if (!await MayUseAsync(dto.Status))
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Only coordinators and admins can mark a star Rescheduled or Not scheduled." });
         try
         {
             var updated = await _service.UpdateRecordAsync(User.GetUserId(), recordId, dto);
