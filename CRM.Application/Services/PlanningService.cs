@@ -141,6 +141,7 @@ public class PlanningService : IPlanningService
         var staffId = plan?.AssignedStaffId ?? (ctx.RosterStaffByParticipant.TryGetValue(p.Id, out var rs) ? rs : (Guid?)null);
         dto.AssignedStaffId = staffId;
         dto.AssignedStaffName = staffId is { } sid ? ctx.Staff.GetValueOrDefault(sid) : null;
+        dto.AssignedStaffSource = staffId is null ? null : plan?.AssignedStaffId is not null ? "Plan" : "Roster";
 
         if (plan is not null)
         {

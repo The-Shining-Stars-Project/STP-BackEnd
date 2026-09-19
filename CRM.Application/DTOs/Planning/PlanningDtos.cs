@@ -18,6 +18,8 @@ public class PerStarPlanDto
     public Guid? PlanId { get; set; }
     public Guid? AssignedStaffId { get; set; }
     public string? AssignedStaffName { get; set; }
+    /// <summary>"Plan" when the plan names someone, "Roster" when it is the quarter's roster default, null when nobody.</summary>
+    public string? AssignedStaffSource { get; set; }
     public ProgressLevel PrimaryTier { get; set; }
     public Guid? PriorityObjectiveAreaId { get; set; }
     public string? PriorityObjectiveAreaName { get; set; }
