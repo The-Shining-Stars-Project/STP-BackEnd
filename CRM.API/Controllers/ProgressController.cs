@@ -63,6 +63,17 @@ public class ProgressController : ControllerBase
         return result is null ? NotFound() : Ok(result);
     }
 
+    /// <summary>A grid's worth of edits in one request; a null score clears the cell.</summary>
+    [HttpPut("weekly")]
+    [Audited("progress.weekly.save", "WeeklyDataEntry")]
+    public async Task<ActionResult<SaveWeeklyScoresResultDto>> SaveWeekly([FromBody] SaveWeeklyScoresDto dto)
+    {
+        if (string.IsNullOrWhiteSpace(dto.MonthKey)) return BadRequest("monthKey is required.");
+        if (dto.Changes.Any(c => c.ParticipantId == Guid.Empty || c.SubSkillId == Guid.Empty || c.WeekNumber < 1))
+            return BadRequest("Every change needs a participantId, subSkillId and a weekNumber ≥ 1.");
+        return Ok(await _service.SaveWeeklyScoresAsync(User.GetUserId(), dto));
+    }
+
     // A named child's month of scores, notes and narrative. Read-auditing here for the same
     // reason as GET /api/participants/{id}: this is the record, not a list page.
     [HttpGet("star/{participantId:guid}")]

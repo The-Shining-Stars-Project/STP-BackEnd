@@ -19,6 +19,13 @@ public interface IProgressTrackingService
     Task<WeeklyDataEntryDto?> RecordWeeklyScoreAsync(Guid currentUserId, RecordWeeklyScoreDto dto);
 
     /// <summary>
+    /// Saves a batch of weekly scores in one transaction; a null score deletes that cell.
+    /// Every star must be in the caller's scope or nothing is written (403 via the access
+    /// service). Returns the entries and month-end snapshots for every (star, skill) touched.
+    /// </summary>
+    Task<SaveWeeklyScoresResultDto> SaveWeeklyScoresAsync(Guid currentUserId, SaveWeeklyScoresDto dto);
+
+    /// <summary>
     /// Every weekly entry for a program's stars (primary or secondary enrollment) in one month —
     /// the Weekly Data grid's bulk read, one call per program instead of one per star.
     /// Throws <see cref="UnauthorizedAccessException"/> if the program is out of scope.

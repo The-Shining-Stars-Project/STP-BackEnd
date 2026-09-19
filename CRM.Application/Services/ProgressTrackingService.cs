@@ -120,6 +120,103 @@ public class ProgressTrackingService : IProgressTrackingService
         return result;
     }
 
+    public async Task<SaveWeeklyScoresResultDto> SaveWeeklyScoresAsync(Guid currentUserId, SaveWeeklyScoresDto dto)
+    {
+        var result = new SaveWeeklyScoresResultDto();
+        if (dto.Changes.Count == 0) return result;
+
+        // Scope check up front for every star in the batch — a teacher's grid never mixes
+        // programs they cannot see, so a failure here is a bug or a forged request, and
+        // either way nothing should be half-written.
+        var known = new HashSet<Guid>();
+        foreach (var pid in dto.Changes.Select(c => c.ParticipantId).Distinct())
+            if (await _access.RequireParticipantAsync(currentUserId, pid) is not null) known.Add(pid);
+        dto.Changes.RemoveAll(c => !known.Contains(c.ParticipantId));
+        if (dto.Changes.Count == 0) return result;
+
+        var recordedBy = await ResolveStaffIdAsync(currentUserId);
+        var weekDate = ParseDate(dto.WeekDate) ?? _clock.Today;
+        var thresholds = (await _uow.ScoreThresholds.GetAllAsync()).Select(t => (t.Level, t.MinAverage)).ToList();
+
+        var starIds = dto.Changes.Select(c => c.ParticipantId).Distinct().ToHashSet();
+        var monthEntries = (await _uow.WeeklyDataEntries.ListAsync(e => e.MonthKey == dto.MonthKey && starIds.Contains(e.ParticipantId))).ToList();
+        var monthSnaps = (await _uow.MonthlyProgressSnapshots.ListAsync(s => s.MonthKey == dto.MonthKey && starIds.Contains(s.ParticipantId))).ToList();
+
+        // Last change to a cell wins, so a teacher who clicked 2 then 3 gets 3 — the bug the
+        // per-cell autosave had was exactly that this was not guaranteed.
+        var changes = dto.Changes
+            .GroupBy(c => (c.ParticipantId, c.SubSkillId, c.WeekNumber))
+            .Select(g => g.Last())
+            .ToList();
+
+        foreach (var c in changes)
+        {
+            var existing = monthEntries.FirstOrDefault(e => e.ParticipantId == c.ParticipantId && e.SubSkillId == c.SubSkillId && e.WeekNumber == c.WeekNumber);
+            if (c.Score is null)
+            {
+                if (existing is null) continue;
+                await _uow.WeeklyDataEntries.DeleteAsync(existing);
+                monthEntries.Remove(existing);
+            }
+            else if (existing is null)
+            {
+                var entry = new WeeklyDataEntry
+                {
+                    ParticipantId = c.ParticipantId,
+                    SubSkillId = c.SubSkillId,
+                    MonthKey = dto.MonthKey,
+                    WeekNumber = c.WeekNumber,
+                    WeekDate = weekDate,
+                    Score = c.Score.Value,
+                    RecordedByStaffMemberId = recordedBy,
+                };
+                await _uow.WeeklyDataEntries.AddAsync(entry);
+                monthEntries.Add(entry);
+            }
+            else
+            {
+                existing.Score = c.Score.Value;
+                existing.WeekDate = weekDate;
+                existing.RecordedByStaffMemberId = recordedBy;
+                await _uow.WeeklyDataEntries.UpdateAsync(existing);
+            }
+        }
+
+        // One snapshot refresh per (star, skill) touched, from the in-memory month.
+        foreach (var (pid, sid) in changes.Select(c => (c.ParticipantId, c.SubSkillId)).Distinct())
+        {
+            var scores = monthEntries.Where(e => e.ParticipantId == pid && e.SubSkillId == sid).Select(e => e.Score);
+            var r = ProgressLevelCalculator.Derive(scores, thresholds);
+            var snap = monthSnaps.FirstOrDefault(s => s.ParticipantId == pid && s.SubSkillId == sid);
+            if (snap is null)
+            {
+                snap = new MonthlyProgressSnapshot
+                {
+                    ParticipantId = pid, SubSkillId = sid, MonthKey = dto.MonthKey,
+                    SuggestedLevel = r.Level, Level = r.Level, SummedScore = r.SummedScore, ScoredWeekCount = r.ScoredWeekCount, IsConfirmed = false,
+                };
+                await _uow.MonthlyProgressSnapshots.AddAsync(snap);
+                monthSnaps.Add(snap);
+            }
+            else
+            {
+                snap.SuggestedLevel = r.Level;
+                snap.SummedScore = r.SummedScore;
+                snap.ScoredWeekCount = r.ScoredWeekCount;
+                if (!snap.IsConfirmed) snap.Level = r.Level;
+                await _uow.MonthlyProgressSnapshots.UpdateAsync(snap);
+            }
+        }
+
+        await _uow.SaveChangesAsync();
+
+        var skills = await SubSkillMapAsync();
+        var touched = changes.Select(c => (c.ParticipantId, c.SubSkillId)).ToHashSet();
+        result.Entries = monthEntries.Where(e => touched.Contains((e.ParticipantId, e.SubSkillId))).OrderBy(e => e.WeekNumber).Select(ToEntryDto).ToList();
+        result.Snapshots = monthSnaps.Where(s => touched.Contains((s.ParticipantId, s.SubSkillId))).Select(s => ToSnapshotDto(s, skills)).ToList();
+        return result;
+    }
+
     /// <summary>
     /// Refreshes the MonthlyProgressSnapshot for one (participant, skill, month) from its
     /// weekly entries. <paramref name="justWritten"/> is the entry the caller has staged but

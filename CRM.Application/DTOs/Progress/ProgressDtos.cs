@@ -22,6 +22,33 @@ public class WeeklyDataEntryDto
     public MonthlyProgressSnapshotDto? Snapshot { get; set; }
 }
 
+/// <summary>
+/// One grid's worth of edits saved in a single request (Sep 2026: per-cell autosave let
+/// out-of-order responses "reset" cells, and a set score could never be cleared).
+/// </summary>
+public class SaveWeeklyScoresDto
+{
+    public string MonthKey { get; set; } = string.Empty;
+    public string? WeekDate { get; set; }
+    public List<WeeklyScoreChangeDto> Changes { get; set; } = new();
+}
+
+public class WeeklyScoreChangeDto
+{
+    public Guid ParticipantId { get; set; }
+    public Guid SubSkillId { get; set; }
+    public int WeekNumber { get; set; }
+    /// <summary>Null clears the cell — the entry is deleted and the month-end level re-derived.</summary>
+    public DataScore? Score { get; set; }
+}
+
+/// <summary>What a bulk save left behind: the surviving entries for every touched (star, skill) and their refreshed month-end snapshots.</summary>
+public class SaveWeeklyScoresResultDto
+{
+    public List<WeeklyDataEntryDto> Entries { get; set; } = new();
+    public List<MonthlyProgressSnapshotDto> Snapshots { get; set; } = new();
+}
+
 public class RecordWeeklyScoreDto
 {
     public Guid ParticipantId { get; set; }
