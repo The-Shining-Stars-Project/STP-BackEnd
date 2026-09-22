@@ -15,6 +15,7 @@ public class StaffSummaryDto
     public string? TShirtSize { get; set; }
     public int OnboardingProgressPct { get; set; }
     public List<string> ProgramNames { get; set; } = new();
+    public List<Guid> ProgramIds { get; set; } = new();
     /// <summary>Training/paperwork expiring within 60 days or already expired. Admin-only (emptied for others).</summary>
     public List<TrainingAlertDto> TrainingAlerts { get; set; } = new();
 }

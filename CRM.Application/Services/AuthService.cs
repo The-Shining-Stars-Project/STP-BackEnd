@@ -1292,6 +1292,25 @@ public class AuthService : IAuthService
         }
 
         if (dto.FullName is not null) user.FullName = dto.FullName.Trim();
+        if (dto.Email is not null)
+        {
+            var newEmail = dto.Email.Trim().ToLowerInvariant();
+            if (newEmail != user.Email)
+            {
+                var taken = await _uow.Users.FirstOrDefaultAsync(u => u.Email == newEmail && u.Id != id);
+                if (taken is not null)
+                {
+                    await _audit.RecordAsync(new AuditEntry
+                    {
+                        Action = "user.update", EntityType = "User", EntityId = id, Succeeded = false,
+                        Summary = $"Rejected email change for {targetEmail}: address already in use",
+                        Metadata = Json(new { email = newEmail, reason = "duplicate email" }),
+                    });
+                    throw new DuplicateEmailException(newEmail);
+                }
+                user.Email = newEmail;
+            }
+        }
         if (dto.Role.HasValue) user.Role = dto.Role.Value;
         if (dto.IsActive.HasValue) user.IsActive = dto.IsActive.Value;
         if (dto.StaffMemberId.HasValue) user.StaffMemberId = dto.StaffMemberId;
@@ -1313,6 +1332,7 @@ public class AuthService : IAuthService
             Metadata = Json(new
             {
                 email = user.Email,
+                emailBefore = targetEmail,
                 roleBefore = previousRole.ToString(),
                 roleAfter = user.Role.ToString(),
                 isActiveBefore = previousActive,

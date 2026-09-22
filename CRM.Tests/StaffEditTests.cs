@@ -1,5 +1,6 @@
 using CRM.Application.DTOs.Staff;
 using CRM.Application.Services;
+using CRM.Domain.Entities;
 using CRM.Domain.Enums;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -52,6 +53,27 @@ public class StaffEditTests
         Assert.Equal("Scott Davis (2024–25)", updated!.FullName);
         Assert.True(updated.IsFormer);
         Assert.Equal("2025-06-30", updated.EndDate);
+    }
+
+    [Fact]
+    public async Task Update_replaces_program_assignments_when_a_list_is_sent()
+    {
+        var mjc = new CrmProgram { Name = "MJC", Slug = "mjc" };
+        var pathways = new CrmProgram { Name = "Pathways", Slug = "pathways" };
+        _uow.ProgramsRepo.Items.AddRange([mjc, pathways]);
+        var created = await _staff.CreateAsync(new CreateStaffDto { FullName = "Multi Site", Initials = "MS", Role = StaffRole.Teacher, ProgramIds = { mjc.Id } });
+        Assert.Equal([mjc.Id], created.ProgramIds);
+
+        var both = await _staff.UpdateAsync(created.Id, new UpdateStaffDto { ProgramIds = [mjc.Id, pathways.Id, Guid.NewGuid()] });
+        Assert.Equal(2, both!.ProgramIds.Count);
+        Assert.Contains(pathways.Id, both.ProgramIds);
+
+        var onlyPathways = await _staff.UpdateAsync(created.Id, new UpdateStaffDto { ProgramIds = [pathways.Id] });
+        Assert.Equal([pathways.Id], onlyPathways!.ProgramIds);
+
+        // Omitting the list leaves assignments alone.
+        var untouched = await _staff.UpdateAsync(created.Id, new UpdateStaffDto { Initials = "MX" });
+        Assert.Equal([pathways.Id], untouched!.ProgramIds);
     }
 
     [Fact]

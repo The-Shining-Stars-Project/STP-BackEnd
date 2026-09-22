@@ -38,6 +38,11 @@ public class UpdateUserDto
     [StringLength(200, MinimumLength = 1)]
     public string? FullName { get; set; }
 
+    /// <summary>New sign-in address (Sep 2026 client ask). Must not belong to another account.</summary>
+    [EmailAddress]
+    [StringLength(254)]
+    public string? Email { get; set; }
+
     public UserRole? Role { get; set; }
     public bool? IsActive { get; set; }
     public Guid? StaffMemberId { get; set; }

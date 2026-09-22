@@ -62,6 +62,7 @@ public class StaffService : IStaffService
                 .OfType<string>()
                 .ToList();
             var dto = ToSummary(s, progNames);
+            dto.ProgramIds = progIds.Where(programMap.ContainsKey).ToList();
             if (s.EndDate is null) dto.TrainingAlerts = alertsByStaff.GetValueOrDefault(s.Id) ?? new();
             return dto;
         }).ToList();
@@ -78,11 +79,9 @@ public class StaffService : IStaffService
             .OrderBy(o => o.SortOrder).ThenBy(o => o.CreatedAt).ToList();
 
         var programMap = programs.ToDictionary(p => p.Id, p => p.Name);
-        var progNames = assignments
-            .Where(a => a.StaffMemberId == id)
-            .Select(a => programMap.GetValueOrDefault(a.ProgramId))
-            .OfType<string>()
-            .ToList();
+        var mine = assignments.Where(a => a.StaffMemberId == id).ToList();
+        var progNames = mine.Select(a => programMap.GetValueOrDefault(a.ProgramId)).OfType<string>().ToList();
+        var progIds = mine.Where(a => programMap.ContainsKey(a.ProgramId)).Select(a => a.ProgramId).ToList();
 
         return new StaffDetailDto
         {
@@ -96,6 +95,7 @@ public class StaffService : IStaffService
             TShirtSize = s.TShirtSize,
             OnboardingProgressPct = s.OnboardingProgressPct,
             ProgramNames = progNames,
+            ProgramIds = progIds,
             OnboardingItems = onboardingItems.Select(o => new OnboardingItemDto
             {
                 Id = o.Id,
@@ -172,6 +172,23 @@ public class StaffService : IStaffService
         if (dto.TShirtSize is not null) member.TShirtSize = dto.TShirtSize;
 
         await _uow.Staff.UpdateAsync(member);
+
+        // ProgramIds, when sent, is the whole list (Sep 2026: editable from the staff page,
+        // not only one program at a time from each program's Manage staff panel). Program
+        // membership is what a teacher's login can see, so unknown ids are dropped rather
+        // than granting access to nothing.
+        if (dto.ProgramIds is not null)
+        {
+            var known = (await _uow.Programs.GetAllAsync()).Select(p => p.Id).ToHashSet();
+            var wanted = dto.ProgramIds.Where(known.Contains).ToHashSet();
+            var current = (await _uow.GetStaffProgramAssignmentsAsync())
+                .Where(a => a.StaffMemberId == id).Select(a => a.ProgramId).ToHashSet();
+            foreach (var pid in current.Except(wanted))
+                await _uow.RemoveStaffProgramAssignmentAsync(id, pid);
+            foreach (var pid in wanted.Except(current))
+                await _uow.AddStaffProgramAssignmentAsync(new StaffProgramAssignment { StaffMemberId = id, ProgramId = pid });
+        }
+
         await _uow.SaveChangesAsync();
 
         return await GetByIdAsync(id);
