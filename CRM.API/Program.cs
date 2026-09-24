@@ -490,7 +490,19 @@ using (var scope = app.Services.CreateScope())
     // (#4) and default logins with the publicly-known password `ChangeMe!123` (#3). Running
     // them in production once filled the live CRM with fake records ("Kezia Morales") and
     // created takeover-able accounts.
-    if (app.Environment.IsDevelopment())
+    // Belt and braces (incident 2026-09-24): `dotnet run` applies launchSettings.json, which
+    // sets Development regardless of the shell's ASPNETCORE_ENVIRONMENT — and this machine's
+    // user secrets point at the LIVE Azure database. A Development boot then seeded the
+    // default admin (public password) into production. Demo seeding now also requires the
+    // connection to be local; Azure SQL is never a demo target whatever the environment says.
+    var connForSeedCheck = builder.Configuration.GetConnectionString("DefaultConnection") ?? string.Empty;
+    var looksRemote = connForSeedCheck.Contains("database.windows.net", StringComparison.OrdinalIgnoreCase);
+    if (app.Environment.IsDevelopment() && looksRemote)
+        app.Logger.LogWarning(
+            "Development environment but the connection string targets Azure SQL — demo seeding SKIPPED. "
+            + "Point user secrets at a local database to seed demo data.");
+
+    if (app.Environment.IsDevelopment() && !looksRemote)
     {
         var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
         await DataSeeder.SeedAsync(db);
