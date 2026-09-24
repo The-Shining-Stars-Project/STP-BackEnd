@@ -119,7 +119,7 @@ public class ProgramService : IProgramService
             .ToHashSet();
         var staff = staffIds.Count == 0
             ? new List<StaffMember>()
-            : (await _uow.Staff.ListAsync(s => staffIds.Contains(s.Id))).ToList();
+            : (await _uow.Staff.ListAsync(s => staffIds.Contains(s.Id) && s.EndDate == null)).ToList();
 
         var summary = await GetBySlugAsync(slug);
 

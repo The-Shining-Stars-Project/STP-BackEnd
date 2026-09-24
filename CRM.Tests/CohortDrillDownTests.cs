@@ -37,7 +37,7 @@ public class CohortDrillDownTests
             new ScoreThreshold { Level = ProgressLevel.Intermediate, MinAverage = 1.5 },
             new ScoreThreshold { Level = ProgressLevel.Expert, MinAverage = 2.5 },
         ]);
-        _service = new CohortRollUpService(_uow);
+        _service = new CohortRollUpService(_uow, new FakeAllowAllAccess(_uow));
     }
 
     private Guid AddStar(string name, Guid programId, Guid? secondary = null)
@@ -76,7 +76,7 @@ public class CohortDrillDownTests
         var star = AddStar("Alpha One", ProgA);
         await Score(star, null, DataScore.Independent, DataScore.Independent);
 
-        var rollUp = await _service.GetRollUpAsync(Month, null);
+        var rollUp = await _service.GetRollUpAsync(Guid.NewGuid(), Month, null);
         var row = rollUp.Rows.Single(r => r.SubSkillId == SkillId);
 
         Assert.Equal(1, row.ExpertCount);
@@ -84,7 +84,7 @@ public class CohortDrillDownTests
         Assert.Equal(1, rollUp.ParticipantCount);
         Assert.Equal(0, rollUp.ConfirmedCount);
 
-        var stars = await _service.GetStarsAtLevelAsync(Month, SkillId, ProgressLevel.Expert, null);
+        var stars = await _service.GetStarsAtLevelAsync(Guid.NewGuid(), Month, SkillId, ProgressLevel.Expert, null);
         Assert.Equal(["Alpha One"], stars.Select(s => s.FullName).ToArray());
     }
 
@@ -95,14 +95,14 @@ public class CohortDrillDownTests
         await Score(star, null, DataScore.Independent, DataScore.Independent); // derives Expert
         Confirm(star, ProgressLevel.Intermediate);                             // teacher says otherwise
 
-        var rollUp = await _service.GetRollUpAsync(Month, null);
+        var rollUp = await _service.GetRollUpAsync(Guid.NewGuid(), Month, null);
         var row = rollUp.Rows.Single(r => r.SubSkillId == SkillId);
 
         Assert.Equal(0, row.ExpertCount);
         Assert.Equal(1, row.IntermediateCount);
         Assert.Equal(1, rollUp.ConfirmedCount);
-        Assert.Empty(await _service.GetStarsAtLevelAsync(Month, SkillId, ProgressLevel.Expert, null));
-        Assert.Single(await _service.GetStarsAtLevelAsync(Month, SkillId, ProgressLevel.Intermediate, null));
+        Assert.Empty(await _service.GetStarsAtLevelAsync(Guid.NewGuid(), Month, SkillId, ProgressLevel.Expert, null));
+        Assert.Single(await _service.GetStarsAtLevelAsync(Guid.NewGuid(), Month, SkillId, ProgressLevel.Intermediate, null));
     }
 
     [Fact]
@@ -117,9 +117,9 @@ public class CohortDrillDownTests
             Level = ProgressLevel.Expert, SuggestedLevel = ProgressLevel.Expert, IsConfirmed = false,
         });
 
-        var rollUp = await _service.GetRollUpAsync(Month, null);
+        var rollUp = await _service.GetRollUpAsync(Guid.NewGuid(), Month, null);
         Assert.Equal(0, rollUp.Rows.Single(r => r.SubSkillId == SkillId).ScoredCount);
-        Assert.Empty(await _service.GetStarsAtLevelAsync(Month, SkillId, ProgressLevel.Expert, null));
+        Assert.Empty(await _service.GetStarsAtLevelAsync(Guid.NewGuid(), Month, SkillId, ProgressLevel.Expert, null));
     }
 
     [Fact]
@@ -128,7 +128,7 @@ public class CohortDrillDownTests
         var star = AddStar("Alpha One", ProgA);
         await Score(star, null, DataScore.NotApplicable, DataScore.NotApplicable);
 
-        var rollUp = await _service.GetRollUpAsync(Month, null);
+        var rollUp = await _service.GetRollUpAsync(Guid.NewGuid(), Month, null);
         var row = rollUp.Rows.Single(r => r.SubSkillId == SkillId);
 
         Assert.Equal(1, row.NotApplicableCount);
@@ -146,9 +146,9 @@ public class CohortDrillDownTests
         // A's count does not include them either.
         await Score(AddStar("Delta Four", ProgB, secondary: ProgA), null, DataScore.Independent);
 
-        var rollUp = await _service.GetRollUpAsync(Month, ProgA);
+        var rollUp = await _service.GetRollUpAsync(Guid.NewGuid(), Month, ProgA);
         var row = rollUp.Rows.Single(r => r.SubSkillId == SkillId);
-        var stars = await _service.GetStarsAtLevelAsync(Month, SkillId, ProgressLevel.Expert, ProgA);
+        var stars = await _service.GetStarsAtLevelAsync(Guid.NewGuid(), Month, SkillId, ProgressLevel.Expert, ProgA);
 
         Assert.Equal(row.ExpertCount, stars.Count);
         Assert.Equal(2, stars.Count);
@@ -163,10 +163,10 @@ public class CohortDrillDownTests
         await Score(alpha, OtherSkillId, DataScore.Refusal); // a second skill is not a second star
         await Score(AddStar("Gamma Three", ProgB), null, DataScore.FullPrompts);
 
-        var rollUp = await _service.GetRollUpAsync(Month, null);
+        var rollUp = await _service.GetRollUpAsync(Guid.NewGuid(), Month, null);
         Assert.Equal(2, rollUp.ParticipantCount);
 
-        var stars = await _service.GetStarsAtLevelAsync(Month, SkillId, ProgressLevel.Novice, null);
+        var stars = await _service.GetStarsAtLevelAsync(Guid.NewGuid(), Month, SkillId, ProgressLevel.Novice, null);
         Assert.Equal(["Alpha One", "Gamma Three"], stars.Select(s => s.FullName).ToArray());
     }
 
@@ -180,7 +180,7 @@ public class CohortDrillDownTests
             WeekNumber = 1, WeekDate = new DateTime(2026, 7, 6), Score = DataScore.Independent,
         });
 
-        var rollUp = await _service.GetRollUpAsync(Month, null);
+        var rollUp = await _service.GetRollUpAsync(Guid.NewGuid(), Month, null);
         Assert.Equal(0, rollUp.Rows.Single(r => r.SubSkillId == SkillId).ScoredCount);
     }
 }

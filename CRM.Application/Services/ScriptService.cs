@@ -187,6 +187,21 @@ public class ScriptService : IScriptService
         return await GetByIdAsync(id);
     }
 
+    public async Task<bool> DeleteAsync(Guid id, CancellationToken ct = default)
+    {
+        var script = await _uow.Scripts.GetByIdAsync(id);
+        if (script is null) return false;
+
+        var blobName = script.PdfBlobName;
+        await _uow.ReplaceScriptProgramsAsync(id, Array.Empty<Guid>());
+        await _uow.Scripts.DeleteAsync(script);
+        await _uow.SaveChangesAsync();
+
+        // Row first, blob second — same rule as RemovePdf: never a row pointing at nothing.
+        if (blobName is not null) await TryDeleteAsync(blobName);
+        return true;
+    }
+
     /// <summary>
     /// Refuses anything that is not a PDF, by file name and by header, and returns the
     /// sanitised name to store. Rewinds <paramref name="content"/> to the start so the upload

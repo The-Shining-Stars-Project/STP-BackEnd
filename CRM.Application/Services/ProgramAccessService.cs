@@ -26,6 +26,11 @@ public class ProgramAccessService : IProgramAccessService
         // falling through to an unfiltered view.
         if (user.StaffMemberId is not { } staffId) return ProgramAccess.None;
 
+        // A former staff member's assignments are kept for history but no longer grant
+        // access (client rule, Sep 2026: "invisible once marked as former").
+        var staff = await _uow.Staff.GetByIdAsync(staffId);
+        if (staff is null || staff.EndDate is not null) return ProgramAccess.None;
+
         var assignments = await _uow.GetStaffProgramAssignmentsAsync();
         return new ProgramAccess(false, assignments
             .Where(a => a.StaffMemberId == staffId)
@@ -38,7 +43,11 @@ public class ProgramAccessService : IProgramAccessService
         var participant = await _uow.Participants.GetByIdAsync(participantId);
         if (participant is null) return null;
 
+        // Either enrolment is enough: a Pathways teacher works with a dual-enrolled star
+        // whose primary program is Part-time, and vice versa.
         var access = await ForUserAsync(userId);
+        if (access.CanAccess(participant.ProgramId)) return participant;
+        if (participant.SecondaryProgramId is { } sec && access.CanAccess(sec)) return participant;
         access.Require(participant.ProgramId);
         return participant;
     }

@@ -93,4 +93,11 @@ public class ScriptsController : ControllerBase
         var result = await _service.RemovePdfAsync(id, ct);
         return result is null ? NotFound() : Ok(result);
     }
+
+    /// <summary>Deletes the script outright, PDF included. Management only.</summary>
+    [HttpDelete("{id:guid}")]
+    [Authorize(Policy = "ManagementWrite")]
+    [Audited("script.delete", "Script")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct) =>
+        await _service.DeleteAsync(id, ct) ? NoContent() : NotFound();
 }

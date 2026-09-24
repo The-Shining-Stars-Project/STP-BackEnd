@@ -100,12 +100,11 @@ public class AttendanceController : ControllerBase
     }
 
     /// <summary>
-    /// Finalizes a session, locking its records. Management only (client rule, Sep 2026):
-    /// teachers mark, coordinators finalize — a teacher submitting the moment every star was
-    /// marked left late arrivals unfixable.
+    /// Finalizes a session, locking its records. Any assigned teacher may submit (the client
+    /// asked for this back the day after it was made management-only); what makes a premature
+    /// submit harmless now is Reopen, which stays management-only.
     /// </summary>
     [HttpPost("session/{sessionId:guid}/submit")]
-    [Authorize(Policy = "ManagementWrite")]
     [Audited("attendance.session.submit", "Session")]
     public async Task<IActionResult> SubmitSession(Guid sessionId)
     {

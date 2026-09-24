@@ -100,9 +100,13 @@ public class PlanningService : IPlanningService
         // named anyone yet — teachers expected their roster to carry over here (Sep 2026).
         var (year, quarter) = QuarterOf(monthKey);
         var roster = await _uow.RosterAssignments.ListAsync(r => r.Year == year && r.Quarter == quarter);
-        var rosterStaff = roster
-            .Where(r => r.AssignedStaffId is not null)
-            .ToDictionary(r => r.ParticipantId, r => r.AssignedStaffId!.Value);
+        // One roster row per enrolment now; the plan follows the primary program's placement,
+        // falling back to any enrolment's teacher when the primary has none.
+        var primaryOf = (await _uow.Participants.GetAllAsync()).ToDictionary(p => p.Id, p => p.ProgramId);
+        var rosterStaff = new Dictionary<Guid, Guid>();
+        foreach (var r in roster.Where(r => r.AssignedStaffId is not null)
+                                .OrderBy(r => primaryOf.GetValueOrDefault(r.ParticipantId) == r.ProgramId ? 0 : 1))
+            rosterStaff.TryAdd(r.ParticipantId, r.AssignedStaffId!.Value);
 
         return new Ctx(
             programs.ToDictionary(p => p.Id),

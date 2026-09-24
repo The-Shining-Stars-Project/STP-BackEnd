@@ -135,3 +135,66 @@ public class SitesAndRosterTests
         Assert.Equal(Manteca, entry.SiteId);
     }
 }
+
+/// <summary>A dual-enrolled Star has one roster row per program, each with its own placement.</summary>
+public class DualEnrollmentRosterTests
+{
+    private static readonly Guid UserId = Guid.NewGuid();
+    private static readonly Guid Pathways = Guid.NewGuid();
+    private static readonly Guid PartTime = Guid.NewGuid();
+    private static readonly Guid StarId = Guid.NewGuid();
+    private static readonly Guid TeacherA = Guid.NewGuid();
+    private static readonly Guid TeacherB = Guid.NewGuid();
+
+    private readonly FakeUnitOfWork _uow = new();
+    private readonly RosterService _roster;
+
+    public DualEnrollmentRosterTests()
+    {
+        _roster = new RosterService(_uow, new FakeAllowAllAccess(_uow));
+        _uow.Programs.AddAsync(new CrmProgram { Id = Pathways, Name = "Pathways: Manteca", Slug = "pathways:-manteca" }).GetAwaiter().GetResult();
+        _uow.Programs.AddAsync(new CrmProgram { Id = PartTime, Name = "Manteca: Part-Time", Slug = "manteca:-part-time" }).GetAwaiter().GetResult();
+        _uow.Participants.AddAsync(new Participant { Id = StarId, FullName = "C Quiwa", Initials = "CQ", ProgramId = Pathways, SecondaryProgramId = PartTime }).GetAwaiter().GetResult();
+        _uow.Staff.AddAsync(new StaffMember { Id = TeacherA, FullName = "Teacher A", Initials = "TA" }).GetAwaiter().GetResult();
+        _uow.Staff.AddAsync(new StaffMember { Id = TeacherB, FullName = "Teacher B", Initials = "TB" }).GetAwaiter().GetResult();
+    }
+
+    [Fact]
+    public async Task Roster_lists_the_star_under_both_programs()
+    {
+        var rows = await _roster.GetRosterAsync(UserId, 2026, 4, null);
+
+        Assert.Equal(2, rows.Count);
+        var pathways = Assert.Single(rows, r => r.ProgramId == Pathways);
+        var pt = Assert.Single(rows, r => r.ProgramId == PartTime);
+        Assert.False(pathways.IsSecondaryEnrollment);
+        Assert.True(pt.IsSecondaryEnrollment);
+    }
+
+    [Fact]
+    public async Task Each_enrollment_keeps_its_own_placement()
+    {
+        await _roster.UpsertAssignmentAsync(UserId, new UpsertRosterAssignmentDto { ParticipantId = StarId, ProgramId = Pathways, Year = 2026, Quarter = 4, AssignedStaffId = TeacherA });
+        await _roster.UpsertAssignmentAsync(UserId, new UpsertRosterAssignmentDto { ParticipantId = StarId, ProgramId = PartTime, Year = 2026, Quarter = 4, AssignedStaffId = TeacherB });
+
+        var rows = await _roster.GetRosterAsync(UserId, 2026, 4, null);
+        Assert.Equal(TeacherA, rows.Single(r => r.ProgramId == Pathways).AssignedStaffId);
+        Assert.Equal(TeacherB, rows.Single(r => r.ProgramId == PartTime).AssignedStaffId);
+        Assert.Equal(2, _uow.RosterAssignmentsRepo.Items.Count);
+    }
+
+    [Fact]
+    public async Task Omitting_the_program_means_the_primary()
+    {
+        var entry = await _roster.UpsertAssignmentAsync(UserId, new UpsertRosterAssignmentDto { ParticipantId = StarId, Year = 2026, Quarter = 4, AssignedStaffId = TeacherA });
+        Assert.Equal(Pathways, entry!.ProgramId);
+        Assert.False(entry.IsSecondaryEnrollment);
+    }
+
+    [Fact]
+    public async Task A_program_the_star_is_not_in_is_refused()
+    {
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _roster.UpsertAssignmentAsync(UserId,
+            new UpsertRosterAssignmentDto { ParticipantId = StarId, ProgramId = Guid.NewGuid(), Year = 2026, Quarter = 4 }));
+    }
+}

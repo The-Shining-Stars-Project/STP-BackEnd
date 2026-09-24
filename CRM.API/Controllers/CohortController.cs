@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace CRM.API.Controllers;
 
 [ApiController]
-[Authorize(Roles = "Admin")]
+[Authorize]
 [Route("api/cohort")]
 public class CohortController : ControllerBase
 {
@@ -21,7 +21,7 @@ public class CohortController : ControllerBase
     public async Task<ActionResult<CohortRollUpDto>> GetRollUp([FromQuery] string month, [FromQuery] Guid? programId)
     {
         if (string.IsNullOrWhiteSpace(month)) return BadRequest("month is required (yyyy-MM).");
-        return Ok(await _service.GetRollUpAsync(month, programId));
+        return Ok(await _service.GetRollUpAsync(User.GetUserId(), month, programId));
     }
 
     /// <summary>
@@ -37,6 +37,6 @@ public class CohortController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(month)) return BadRequest("month is required (yyyy-MM).");
         if (subSkillId == Guid.Empty) return BadRequest("subSkillId is required.");
-        return Ok(await _service.GetStarsAtLevelAsync(month, subSkillId, level, programId));
+        return Ok(await _service.GetStarsAtLevelAsync(User.GetUserId(), month, subSkillId, level, programId));
     }
 }

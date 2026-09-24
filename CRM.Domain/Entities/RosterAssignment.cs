@@ -13,6 +13,12 @@ namespace CRM.Domain.Entities;
 public class RosterAssignment : BaseEntity
 {
     public Guid ParticipantId { get; set; }
+    /// <summary>
+    /// The enrolment this placement belongs to. A dual-enrolled Star has one row per program
+    /// per term (client, Sep 2026): the Pathways placement and the Part-time placement can
+    /// name different sites, groups and teachers.
+    /// </summary>
+    public Guid ProgramId { get; set; }
     public Guid? SiteId { get; set; }
     public Guid? StarGroupId { get; set; }
     public Guid? AssignedStaffId { get; set; }
@@ -26,6 +32,7 @@ public class RosterAssignment : BaseEntity
     public string? Notes { get; set; }
 
     public Participant? Participant { get; set; }
+    public CrmProgram? Program { get; set; }
     /// <summary>The primary site (first listed). Every site is in <see cref="Sites"/>.</summary>
     public Site? Site { get; set; }
     public ICollection<RosterAssignmentSite> Sites { get; set; } = new List<RosterAssignmentSite>();

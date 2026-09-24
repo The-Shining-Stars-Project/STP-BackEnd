@@ -30,4 +30,9 @@ public interface IScriptService
     /// unchanged. Returns null when no such script exists.
     /// </summary>
     Task<ScriptDto?> RemovePdfAsync(Guid id, CancellationToken ct = default);
+
+    /// <summary>
+    /// Deletes the script, its program links and its PDF. False when no such script exists.
+    /// </summary>
+    Task<bool> DeleteAsync(Guid id, CancellationToken ct = default);
 }

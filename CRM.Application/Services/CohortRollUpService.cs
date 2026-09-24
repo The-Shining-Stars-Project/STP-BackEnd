@@ -18,11 +18,17 @@ public class CohortRollUpService : ICohortRollUpService
 {
     private readonly IUnitOfWork _uow;
 
-    public CohortRollUpService(IUnitOfWork uow) => _uow = uow;
+    private readonly IProgramAccessService _access;
 
-    public async Task<CohortRollUpDto> GetRollUpAsync(string monthKey, Guid? programId)
+    public CohortRollUpService(IUnitOfWork uow, IProgramAccessService access)
     {
-        var month = await LoadMonthAsync(monthKey, programId);
+        _uow = uow;
+        _access = access;
+    }
+
+    public async Task<CohortRollUpDto> GetRollUpAsync(Guid userId, string monthKey, Guid? programId)
+    {
+        var month = await LoadMonthAsync(userId, monthKey, programId);
 
         var subSkills = (await _uow.SubSkills.GetAllAsync()).Where(s => s.IsActive).ToList();
         var areas = (await _uow.ObjectiveAreas.GetAllAsync()).ToDictionary(a => a.Id);
@@ -74,12 +80,12 @@ public class CohortRollUpService : ICohortRollUpService
     }
 
     public async Task<IReadOnlyList<CohortStarDto>> GetStarsAtLevelAsync(
-        string monthKey, Guid subSkillId, ProgressLevel level, Guid? programId)
+        Guid userId, string monthKey, Guid subSkillId, ProgressLevel level, Guid? programId)
     {
         // Built from the SAME per-(star, skill) map as the counts. If these two ever drift, a
         // user clicks a count of 7 and is shown 5 names, which reads as data loss rather
         // than as two different questions being asked.
-        var month = await LoadMonthAsync(monthKey, programId);
+        var month = await LoadMonthAsync(userId, monthKey, programId);
 
         var ids = month.Levels
             .Where(l => l.Key.SubSkillId == subSkillId && l.Value == level)
@@ -117,18 +123,22 @@ public class CohortRollUpService : ICohortRollUpService
     /// has not asked for double counting, and the counts and the drill-down must agree.
     /// Soft-deleted stars fall out because the participant list never includes them.
     /// </summary>
-    private async Task<MonthLevels> LoadMonthAsync(string monthKey, Guid? programId)
+    private async Task<MonthLevels> LoadMonthAsync(Guid userId, string monthKey, Guid? programId)
     {
+        // Scoped to the caller's programs (#1) now that teachers can open this page: an
+        // admin's "All programs" is every star, a teacher's is the stars in their programs.
+        var access = await _access.ForUserAsync(userId);
         string? programName = null;
         IReadOnlyList<Participant> stars;
         if (programId is { } pid)
         {
+            access.Require(pid);
             programName = (await _uow.Programs.GetByIdAsync(pid))?.Name;
             stars = await _uow.Participants.ListAsync(p => p.ProgramId == pid);
         }
         else
         {
-            stars = await _uow.Participants.GetAllAsync();
+            stars = (await _uow.Participants.GetAllAsync()).Where(p => access.CanAccess(p.ProgramId)).ToList();
         }
 
         var starIds = stars.Select(s => s.Id).ToHashSet();

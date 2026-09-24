@@ -24,9 +24,8 @@ public class RosterService : IRosterService
         var participants = await _uow.Participants.GetAllAsync();
         var ctx = await LoadContextAsync(year, quarter);
 
-        var entries = participants
-            .Where(p => access.CanAccess(p.ProgramId))
-            .Select(p => BuildEntry(p, ctx.AssignmentByParticipant.GetValueOrDefault(p.Id), year, quarter, ctx))
+        var entries = Enrollments(participants, access)
+            .Select(e => BuildEntry(e.Star, e.ProgramId, e.IsSecondary, ctx.Assignment(e.Star.Id, e.ProgramId), year, quarter, ctx))
             .Where(e => siteId is null || e.SiteIds.Contains(siteId.Value));
 
         return Order(entries).ToList();
@@ -38,11 +37,25 @@ public class RosterService : IRosterService
         var participants = await _uow.Participants.GetAllAsync();
         var ctx = await LoadContextAsync(year, quarter);
 
-        var entries = participants
-            .Where(p => access.CanAccess(p.ProgramId))
-            .Select(p => BuildEntry(p, ctx.AssignmentByParticipant.GetValueOrDefault(p.Id), year, quarter, ctx));
+        var entries = Enrollments(participants, access)
+            .Select(e => BuildEntry(e.Star, e.ProgramId, e.IsSecondary, ctx.Assignment(e.Star.Id, e.ProgramId), year, quarter, ctx));
 
         return Order(entries).ToList();
+    }
+
+    /// <summary>
+    /// One (star, program) pair per enrolment the caller may see: the primary program and,
+    /// for a dual-enrolled Star, the secondary. A Part-time-only teacher sees the Part-time
+    /// row of a Pathways-primary Star and not the Pathways one.
+    /// </summary>
+    private static IEnumerable<(Participant Star, Guid ProgramId, bool IsSecondary)> Enrollments(
+        IEnumerable<Participant> participants, ProgramAccess access)
+    {
+        foreach (var p in participants)
+        {
+            if (access.CanAccess(p.ProgramId)) yield return (p, p.ProgramId, false);
+            if (p.SecondaryProgramId is { } sec && sec != p.ProgramId && access.CanAccess(sec)) yield return (p, sec, true);
+        }
     }
 
     public async Task<RosterEntryDto?> UpsertAssignmentAsync(Guid userId, UpsertRosterAssignmentDto dto)
@@ -50,8 +63,16 @@ public class RosterService : IRosterService
         var participant = await _access.RequireParticipantAsync(userId, dto.ParticipantId);
         if (participant is null) return null;
 
+        // The placement belongs to one enrolment; it must be one of the Star's and one the
+        // caller runs. Older clients omit it and mean the primary program.
+        var programId = dto.ProgramId ?? participant.ProgramId;
+        if (programId != participant.ProgramId && programId != participant.SecondaryProgramId)
+            throw new InvalidOperationException("That Star is not enrolled in that program.");
+        (await _access.ForUserAsync(userId)).Require(programId);
+        var isSecondary = programId != participant.ProgramId;
+
         var existing = (await _uow.RosterAssignments.ListAsync(
-            r => r.ParticipantId == dto.ParticipantId && r.Year == dto.Year && r.Quarter == dto.Quarter)).FirstOrDefault();
+            r => r.ParticipantId == dto.ParticipantId && r.ProgramId == programId && r.Year == dto.Year && r.Quarter == dto.Quarter)).FirstOrDefault();
 
         // The single-site form is still accepted; the list wins when both are sent. Only
         // active, real sites survive; order is kept because the first is the primary.
@@ -65,6 +86,7 @@ public class RosterService : IRosterService
             existing = new RosterAssignment
             {
                 ParticipantId = dto.ParticipantId,
+                ProgramId = programId,
                 Year = dto.Year,
                 Quarter = dto.Quarter,
                 SiteId = primary,
@@ -91,7 +113,7 @@ public class RosterService : IRosterService
         await _uow.SaveChangesAsync();
 
         var ctx = await LoadContextAsync(dto.Year, dto.Quarter);
-        return BuildEntry(participant, existing, dto.Year, dto.Quarter, ctx);
+        return BuildEntry(participant, programId, isSecondary, existing, dto.Year, dto.Quarter, ctx);
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -101,8 +123,12 @@ public class RosterService : IRosterService
         Dictionary<Guid, Site> Sites,
         Dictionary<Guid, StarGroup> Groups,
         Dictionary<Guid, StaffMember> Staff,
-        Dictionary<Guid, RosterAssignment> AssignmentByParticipant,
-        Dictionary<Guid, List<Guid>> SitesByAssignment);
+        Dictionary<(Guid ParticipantId, Guid ProgramId), RosterAssignment> AssignmentByEnrollment,
+        Dictionary<Guid, List<Guid>> SitesByAssignment)
+    {
+        public RosterAssignment? Assignment(Guid participantId, Guid programId) =>
+            AssignmentByEnrollment.GetValueOrDefault((participantId, programId));
+    }
 
     private async Task<Ctx> LoadContextAsync(int year, int quarter)
     {
@@ -117,22 +143,23 @@ public class RosterService : IRosterService
             sites.ToDictionary(s => s.Id),
             groups.ToDictionary(g => g.Id),
             staff.ToDictionary(s => s.Id),
-            assignments.ToDictionary(a => a.ParticipantId),
+            assignments.ToDictionary(a => (a.ParticipantId, a.ProgramId)),
             links.GroupBy(l => l.RosterAssignmentId).ToDictionary(g => g.Key, g => g.Select(l => l.SiteId).ToList()));
     }
 
-    private static RosterEntryDto BuildEntry(Participant p, RosterAssignment? a, int year, int quarter, Ctx ctx)
+    private static RosterEntryDto BuildEntry(Participant p, Guid programId, bool isSecondary, RosterAssignment? a, int year, int quarter, Ctx ctx)
     {
-        var program = ctx.Programs.GetValueOrDefault(p.ProgramId);
+        var program = ctx.Programs.GetValueOrDefault(programId);
         var dto = new RosterEntryDto
         {
             ParticipantId = p.Id,
             ParticipantName = p.FullName,
             ParticipantInitials = p.Initials,
             Status = p.Status,
-            ProgramId = p.ProgramId,
+            ProgramId = programId,
             ProgramName = program?.Name ?? "",
             ProgramSlug = program?.Slug ?? "",
+            IsSecondaryEnrollment = isSecondary,
             Quarter = quarter,
             Year = year,
         };
