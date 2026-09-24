@@ -94,6 +94,8 @@ public class SessionRosterDto
     public Guid SessionId { get; set; }
     public Guid ProgramId { get; set; }
     public string ProgramSlug { get; set; } = string.Empty;
+    public ProgramTrack ProgramTrack { get; set; }
+
     public string ProgramName { get; set; } = string.Empty;
     public string ColorHex { get; set; } = string.Empty;
     public string Date { get; set; } = string.Empty;

@@ -274,6 +274,7 @@ public class AttendanceService : IAttendanceService
             SessionId = session.Id,
             ProgramId = program.Id,
             ProgramSlug = program.Slug,
+            ProgramTrack = program.Track,
             ProgramName = program.Name,
             ColorHex = program.ColorHex,
             Date = session.Date.ToString("yyyy-MM-dd"),
