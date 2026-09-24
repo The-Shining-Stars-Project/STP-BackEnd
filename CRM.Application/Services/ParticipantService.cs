@@ -2,6 +2,7 @@ using CRM.Application.DTOs.Participants;
 using CRM.Application.Interfaces;
 using CRM.Application.Interfaces.Services;
 using CRM.Domain.Entities;
+using CRM.Domain.Enums;
 
 namespace CRM.Application.Services;
 
@@ -34,10 +35,11 @@ public class ParticipantService : IParticipantService
         var programs = await _uow.Programs.GetAllAsync(ct);
         var programMap = programs.ToDictionary(p => p.Id, p => p.Name);
         var slugMap = programs.ToDictionary(p => p.Id, p => p.Slug);
+        var trackMap = programs.ToDictionary(p => p.Id, p => p.Track);
 
         // Attendance % from SQL-side aggregates (#8/#11) — no whole-ledger load.
         var pctMap = AttendanceStats.PercentByParticipant(await _stats.GetParticipantAttendanceAsync(ct));
-        return participants.Select(p => ToSummary(p, programMap, slugMap, pctMap)).ToList();
+        return participants.Select(p => ToSummary(p, programMap, slugMap, pctMap, trackMap)).ToList();
     }
 
     public async Task<ParticipantDetailDto?> GetByIdAsync(Guid userId, Guid id)
@@ -66,6 +68,7 @@ public class ParticipantService : IParticipantService
             ProgramId = p.ProgramId,
             ProgramName = prog?.Name ?? string.Empty,
             ProgramSlug = prog?.Slug ?? string.Empty,
+            ProgramTrack = prog?.Track ?? ProgramTrack.PartTime,
             AttendancePct = AttendanceStats.PercentFor(records),
             StartDate = p.StartDate.ToString("yyyy-MM-dd"),
             HasDocAlerts = DocumentAlerts.For(p),
@@ -97,6 +100,7 @@ public class ParticipantService : IParticipantService
             SecondaryProgramId = p.SecondaryProgramId,
             SecondaryProgramName = secondary?.Name,
             SecondaryProgramSlug = secondary?.Slug,
+            SecondaryProgramTrack = secondary?.Track,
             Documents = documents.OrderBy(d => d.CreatedAt).Select(ParticipantDocumentService.ToDto).ToList(),
             RecentAttendance = new(),
         };
@@ -275,7 +279,8 @@ public class ParticipantService : IParticipantService
         Participant p,
         Dictionary<Guid, string> programMap,
         Dictionary<Guid, string>? slugMap = null,
-        Dictionary<Guid, int>? pctMap = null) =>
+        Dictionary<Guid, int>? pctMap = null,
+        Dictionary<Guid, ProgramTrack>? trackMap = null) =>
         new()
         {
             Id = p.Id,
@@ -286,6 +291,7 @@ public class ParticipantService : IParticipantService
             ProgramId = p.ProgramId,
             ProgramName = programMap.GetValueOrDefault(p.ProgramId, string.Empty),
             ProgramSlug = slugMap?.GetValueOrDefault(p.ProgramId, string.Empty) ?? string.Empty,
+            ProgramTrack = trackMap?.GetValueOrDefault(p.ProgramId, ProgramTrack.PartTime) ?? ProgramTrack.PartTime,
             AttendancePct = pctMap?.GetValueOrDefault(p.Id, 0) ?? p.AttendancePct,
             StartDate = p.StartDate.ToString("yyyy-MM-dd"),
             HasDocAlerts = DocumentAlerts.For(p),
@@ -317,5 +323,6 @@ public class ParticipantService : IParticipantService
             SecondaryProgramId = p.SecondaryProgramId,
             SecondaryProgramName = p.SecondaryProgramId is { } sid2 ? programMap.GetValueOrDefault(sid2) : null,
             SecondaryProgramSlug = p.SecondaryProgramId is { } sid3 ? slugMap?.GetValueOrDefault(sid3) : null,
+            SecondaryProgramTrack = p.SecondaryProgramId is { } sid4 && trackMap is not null && trackMap.TryGetValue(sid4, out var st) ? st : null,
         };
 }

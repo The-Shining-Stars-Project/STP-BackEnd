@@ -313,6 +313,22 @@ public class AttendanceService : IAttendanceService
         return true;
     }
 
+    public async Task<bool> ReopenSessionAsync(Guid userId, Guid sessionId)
+    {
+        var session = await _uow.Sessions.GetByIdAsync(sessionId);
+        if (session is null) return false;
+
+        (await _access.ForUserAsync(userId)).Require(session.ProgramId);
+
+        // Idempotent: reopening an open session is a no-op rather than an error.
+        if (session.Status == SessionStatus.Open) return true;
+        session.Status = SessionStatus.Open;
+        session.SubmittedAt = null;
+        await _uow.Sessions.UpdateAsync(session);
+        await _uow.SaveChangesAsync();
+        return true;
+    }
+
     public async Task<IReadOnlyList<AttendanceRosterEntryDto>> GetTodayRosterReadOnlyAsync(
         Guid userId, CancellationToken ct = default)
     {

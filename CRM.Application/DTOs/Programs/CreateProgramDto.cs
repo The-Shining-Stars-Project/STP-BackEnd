@@ -21,6 +21,8 @@ public class CreateProgramDto
     public string? DefaultLocation { get; set; }
 
     public MeetingDays MeetingDays { get; set; } = MeetingDays.None;
+    /// <summary>Pathways or PartTime — which weekly-data framework the program's stars use.</summary>
+    public ProgramTrack Track { get; set; } = ProgramTrack.PartTime;
     public TimeOnly? StartTime { get; set; }
     public TimeOnly? EndTime { get; set; }
 }

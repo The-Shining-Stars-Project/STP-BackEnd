@@ -13,6 +13,7 @@ public class ParticipantSummaryDto
     public Guid ProgramId { get; set; }
     public string ProgramName { get; set; } = string.Empty;
     public string ProgramSlug { get; set; } = string.Empty;
+    public ProgramTrack ProgramTrack { get; set; }
     public int AttendancePct { get; set; }
     public string StartDate { get; set; } = string.Empty;
     public bool HasDocAlerts { get; set; }
@@ -58,4 +59,5 @@ public class ParticipantSummaryDto
     public Guid? SecondaryProgramId { get; set; }
     public string? SecondaryProgramName { get; set; }
     public string? SecondaryProgramSlug { get; set; }
+    public ProgramTrack? SecondaryProgramTrack { get; set; }
 }

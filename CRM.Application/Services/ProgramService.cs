@@ -54,6 +54,7 @@ public class ProgramService : IProgramService
                 SessionSchedule = p.SessionSchedule,
                 DefaultLocation = p.DefaultLocation,
                 MeetingDays = p.MeetingDays,
+                Track = p.Track,
                 StartTime = p.StartTime,
                 EndTime = p.EndTime,
                 EnrolledCount = pts.Count(x => x.Status == Domain.Enums.ParticipantStatus.Active),
@@ -130,6 +131,7 @@ public class ProgramService : IProgramService
             ColorHex = program.ColorHex,
             SessionSchedule = program.SessionSchedule,
             DefaultLocation = program.DefaultLocation,
+            Track = program.Track,
             EnrolledCount = summary?.EnrolledCount ?? 0,
             AttendancePct = summary?.AttendancePct,
             Participants = participants.Select(p => new ParticipantSummaryDto
@@ -193,6 +195,7 @@ public class ProgramService : IProgramService
             SessionSchedule = dto.SessionSchedule,
             DefaultLocation = dto.DefaultLocation,
             MeetingDays = dto.MeetingDays,
+            Track = dto.Track,
             StartTime = dto.StartTime,
             EndTime = dto.EndTime,
         };
@@ -209,6 +212,7 @@ public class ProgramService : IProgramService
             SessionSchedule = program.SessionSchedule,
             DefaultLocation = program.DefaultLocation,
             MeetingDays = program.MeetingDays,
+            Track = program.Track,
             StartTime = program.StartTime,
             EndTime = program.EndTime,
             EnrolledCount = 0,
@@ -227,6 +231,7 @@ public class ProgramService : IProgramService
         program.SessionSchedule = dto.SessionSchedule;
         program.DefaultLocation = dto.DefaultLocation;
         program.MeetingDays = dto.MeetingDays;
+        program.Track = dto.Track;
         program.StartTime = dto.StartTime;
         program.EndTime = dto.EndTime;
 

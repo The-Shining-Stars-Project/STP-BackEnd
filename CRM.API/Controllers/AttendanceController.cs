@@ -99,14 +99,39 @@ public class AttendanceController : ControllerBase
         }
     }
 
-    /// <summary>Finalizes a session, locking its records.</summary>
+    /// <summary>
+    /// Finalizes a session, locking its records. Management only (client rule, Sep 2026):
+    /// teachers mark, coordinators finalize — a teacher submitting the moment every star was
+    /// marked left late arrivals unfixable.
+    /// </summary>
     [HttpPost("session/{sessionId:guid}/submit")]
+    [Authorize(Policy = "ManagementWrite")]
     [Audited("attendance.session.submit", "Session")]
     public async Task<IActionResult> SubmitSession(Guid sessionId)
     {
         try
         {
             var ok = await _service.SubmitSessionAsync(User.GetUserId(), sessionId);
+            return ok ? NoContent() : NotFound();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Unlocks a submitted session so attendance can be corrected (late arrival, iPad mis-tap).
+    /// Management only, and audited — attendance drives funding, so every unlock has a name on it.
+    /// </summary>
+    [HttpPost("session/{sessionId:guid}/reopen")]
+    [Authorize(Policy = "ManagementWrite")]
+    [Audited("attendance.session.reopen", "Session")]
+    public async Task<IActionResult> ReopenSession(Guid sessionId)
+    {
+        try
+        {
+            var ok = await _service.ReopenSessionAsync(User.GetUserId(), sessionId);
             return ok ? NoContent() : NotFound();
         }
         catch (UnauthorizedAccessException ex)

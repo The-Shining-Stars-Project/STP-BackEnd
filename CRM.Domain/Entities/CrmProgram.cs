@@ -10,6 +10,14 @@ public class CrmProgram : BaseEntity
     public string ColorHex { get; set; } = string.Empty;
     public string? DefaultLocation { get; set; }
 
+    /// <summary>
+    /// Which progress framework this program's stars are tracked on. Set explicitly on the
+    /// Programs page rather than guessed from the slug: the client's hand-created
+    /// "Pathways: Manteca" has slug "pathways:-manteca", which the old slug check read as
+    /// Part-time and hid every Pathways criterion.
+    /// </summary>
+    public ProgramTrack Track { get; set; } = ProgramTrack.PartTime;
+
     /// <summary>Human-readable schedule label for display, e.g. "Mon / Wed / Fri".</summary>
     public string? SessionSchedule { get; set; }
 

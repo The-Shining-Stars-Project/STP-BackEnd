@@ -2,6 +2,8 @@ using CRM.Application.DTOs.Calendar;
 using CRM.Application.DTOs.Participants;
 using CRM.Application.DTOs.Staff;
 
+using CRM.Domain.Enums;
+
 namespace CRM.Application.DTOs.Programs;
 
 public class ProgramDetailDto
@@ -12,6 +14,7 @@ public class ProgramDetailDto
     public string ColorHex { get; set; } = string.Empty;
     public string? SessionSchedule { get; set; }
     public string? DefaultLocation { get; set; }
+    public ProgramTrack Track { get; set; }
     public int EnrolledCount { get; set; }
     public int? AttendancePct { get; set; }
     public List<ParticipantSummaryDto> Participants { get; set; } = new();

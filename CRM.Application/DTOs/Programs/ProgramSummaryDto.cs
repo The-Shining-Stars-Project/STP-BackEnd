@@ -13,6 +13,7 @@ public class ProgramSummaryDto
 
     /// <summary>Structured meeting days (flags enum), e.g. "Monday, Wednesday, Friday".</summary>
     public MeetingDays MeetingDays { get; set; }
+    public ProgramTrack Track { get; set; }
     public TimeOnly? StartTime { get; set; }
     public TimeOnly? EndTime { get; set; }
     public int EnrolledCount { get; set; }
