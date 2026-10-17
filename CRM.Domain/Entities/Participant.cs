@@ -74,6 +74,9 @@ public class Participant : BaseEntity
     public Guid? SecondaryProgramId { get; set; }
     public CrmProgram? SecondaryProgram { get; set; }
 
+    /// <summary>True when this star is enrolled in the program as either primary or secondary.</summary>
+    public bool IsEnrolledIn(Guid programId) => ProgramId == programId || SecondaryProgramId == programId;
+
     public CrmProgram Program { get; set; } = null!;
     public ICollection<AttendanceRecord> AttendanceRecords { get; set; } = new List<AttendanceRecord>();
     public ICollection<DocumentRecord> Documents { get; set; } = new List<DocumentRecord>();

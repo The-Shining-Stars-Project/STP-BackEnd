@@ -52,7 +52,24 @@ public class AttendanceRosterEntryDto
 public class CreateAttendanceNoteDto
 {
     public string Content { get; set; } = string.Empty;
-    public string NoteType { get; set; } = "observation";
+    public string NoteType { get; set; } = AttendanceNoteRules.Observation;
+}
+
+/// <summary>
+/// What an attendance note may hold, checked in AttendanceService (→ 400). Before Oct 2026
+/// an over-long note reached SQL and came back as a 409 the page never showed, so the note
+/// just "didn't save".
+/// </summary>
+public static class AttendanceNoteRules
+{
+    /// <summary>Matches the column width (AttendanceNoteConfiguration: HasMaxLength(1000)).</summary>
+    public const int ContentMaxLength = 1000;
+
+    public const string Observation = "observation";
+    public const string Concern = "concern";
+
+    /// <summary>The two kinds the attendance note box offers.</summary>
+    public static readonly IReadOnlySet<string> NoteTypes = new HashSet<string> { Observation, Concern };
 }
 
 /// <summary>Body for POST /api/attendance/session — opens (get-or-creates) a program's session for a date.</summary>

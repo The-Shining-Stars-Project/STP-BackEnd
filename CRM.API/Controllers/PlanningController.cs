@@ -30,6 +30,7 @@ public class PlanningController : ControllerBase
     public PlanningController(IPlanningService service) => _service = service;
 
     [HttpGet("per-star")]
+    [Audited("planning.perstar.list", "PerStarPlan")]
     public async Task<ActionResult<IReadOnlyList<PerStarPlanDto>>> GetPerStar(
         [FromQuery] string month, [FromQuery] Guid? programId)
     {

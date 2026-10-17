@@ -17,6 +17,7 @@ public class CohortDrillDownTests
     private static readonly Guid OtherSkillId = Guid.Parse("11111111-0000-0000-0000-0000000000f9");
     private static readonly Guid ProgA = Guid.Parse("22222222-0000-0000-0000-0000000000f2");
     private static readonly Guid ProgB = Guid.Parse("33333333-0000-0000-0000-0000000000f3");
+    private static readonly Guid AreaId = Guid.Parse("44444444-0000-0000-0000-0000000000f4");
     private const string Month = "2026-08";
 
     private readonly FakeUnitOfWork _uow = new();
@@ -28,9 +29,13 @@ public class CohortDrillDownTests
             new CrmProgram { Id = ProgA, Name = "MJC", Slug = "mjc" },
             new CrmProgram { Id = ProgB, Name = "Pathways", Slug = "pathways" },
         ]);
+        // Both programs default to the Part-time track, so the skills need a Part-time area to
+        // be in scope (the track filter itself is covered by CohortTrackFilterTests).
+        ((FakeRepository<ObjectiveArea>)_uow.ObjectiveAreas).Items.Add(
+            new ObjectiveArea { Id = AreaId, Name = "Communication Goals", Track = ProgramTrack.PartTime, SortOrder = 2 });
         _uow.SubSkillsRepo.Items.AddRange([
-            new SubSkill { Id = SkillId, Name = "Projection", IsActive = true },
-            new SubSkill { Id = OtherSkillId, Name = "Eye contact", IsActive = true },
+            new SubSkill { Id = SkillId, ObjectiveAreaId = AreaId, Name = "Projection", IsActive = true },
+            new SubSkill { Id = OtherSkillId, ObjectiveAreaId = AreaId, Name = "Eye contact", IsActive = true },
         ]);
         _uow.ScoreThresholdsRepo.Items.AddRange([
             new ScoreThreshold { Level = ProgressLevel.Novice, MinAverage = 0.0 },

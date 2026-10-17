@@ -1107,9 +1107,9 @@ public class AuthService : IAuthService
     private async Task<AuthSessionDto> CreateSessionAsync(User user)
     {
         // Include the linked staff role so management-write policies can allow Coordinators.
-        StaffRole? staffRole = user.StaffMemberId is { } sid
-            ? (await _uow.Staff.GetByIdAsync(sid))?.Role
-            : null;
+        // Every session (password, MFA code, refresh, MFA enable/disable) is minted here, so
+        // this is the one place the former-staff rule has to hold for the claim.
+        var staffRole = await EffectiveStaffRoleAsync(user);
 
         var (token, expiresAt) = _tokens.CreateToken(user, staffRole);
 
@@ -1123,12 +1123,31 @@ public class AuthService : IAuthService
         await _uow.RefreshTokens.AddAsync(refresh);
         await _uow.SaveChangesAsync();
 
+        // The frontend adopts this user straight from the sign-in response, so it carries the
+        // same staff role as the token; without it canManage stayed false until a reload.
+        var dto = ToDto(user);
+        dto.StaffRole = staffRole;
+
         return new AuthSessionDto
         {
-            Auth = new AuthResultDto { Token = token, ExpiresAt = expiresAt, User = ToDto(user) },
+            Auth = new AuthResultDto { Token = token, ExpiresAt = expiresAt, User = dto },
             RefreshToken = raw,
             RefreshExpiresAt = refresh.ExpiresAt,
         };
+    }
+
+    /// <summary>
+    /// The staff role a session acts with: the linked record's role, or null when there is no
+    /// link, the record is gone, or it is former. A former record grants no program scope
+    /// (ProgramAccessService), and before Oct 2026 a former Coordinator still kept the
+    /// staffRole claim and with it ManagementWrite. Same test as ProgramAccessService: any
+    /// EndDate at all means former.
+    /// </summary>
+    private async Task<StaffRole?> EffectiveStaffRoleAsync(User user)
+    {
+        if (user.StaffMemberId is not { } sid) return null;
+        var staff = await _uow.Staff.GetByIdAsync(sid);
+        return staff is { EndDate: null } ? staff.Role : null;
     }
 
     /// <summary>
@@ -1194,6 +1213,9 @@ public class AuthService : IAuthService
             throw new DuplicateEmailException(email);
         }
 
+        if (dto.StaffMemberId is { } staffMemberId)
+            await ValidateStaffLinkAuditedAsync(staffMemberId, Guid.Empty, "user.create", null, email);
+
         var (hash, salt) = _hasher.HashPassword(dto.Password);
 
         var user = new User
@@ -1231,9 +1253,9 @@ public class AuthService : IAuthService
         if (user is null) return null;
         var dto = ToDto(user);
         // The linked staff role decides what the UI offers a signed-in staff account
-        // (teacher: read + notes; coordinator: management edits).
-        if (user.StaffMemberId is { } sid)
-            dto.StaffRole = (await _uow.Staff.GetByIdAsync(sid))?.Role;
+        // (teacher: read + notes; coordinator: management edits). It must match the token's
+        // claim, so a former record reads as no staff role here too (Oct 2026).
+        dto.StaffRole = await EffectiveStaffRoleAsync(user);
         return dto;
     }
 
@@ -1262,6 +1284,7 @@ public class AuthService : IAuthService
         // controller filter.
         var previousRole = user.Role;
         var previousActive = user.IsActive;
+        var previousStaffId = user.StaffMemberId;
         var targetEmail = user.Email;
 
         // Block changes that would strip the system of its last usable admin.
@@ -1290,6 +1313,12 @@ public class AuthService : IAuthService
                 throw;
             }
         }
+
+        // Only a CHANGED link is checked, before anything is mutated. Re-saving a user with the
+        // link they already have keeps working even if that record has since been marked
+        // former, and clearing a link is always allowed.
+        if (dto.StaffMemberId is { } newStaffId && newStaffId != previousStaffId)
+            await ValidateStaffLinkAuditedAsync(newStaffId, id, "user.update", id, targetEmail);
 
         if (dto.FullName is not null) user.FullName = dto.FullName.Trim();
         if (dto.Email is not null)
@@ -1322,6 +1351,10 @@ public class AuthService : IAuthService
         var roleChanged = previousRole != user.Role;
         var deactivated = previousActive && !user.IsActive;
 
+        // The staff link decides what a teacher can see, and before Oct 2026 a re-point left
+        // no trace, so "which Scott Davis is this login on, and since when?" had no answer.
+        // Names ride along because the ids alone are unreadable in the audit viewer; at most
+        // two primary-key lookups on an admin-only path.
         await _audit.RecordAsync(new AuditEntry
         {
             Action = "user.update",
@@ -1337,6 +1370,10 @@ public class AuthService : IAuthService
                 roleAfter = user.Role.ToString(),
                 isActiveBefore = previousActive,
                 isActiveAfter = user.IsActive,
+                staffMemberIdBefore = previousStaffId,
+                staffMemberIdAfter = user.StaffMemberId,
+                staffNameBefore = await StaffNameAsync(previousStaffId),
+                staffNameAfter = await StaffNameAsync(user.StaffMemberId),
             }),
         });
 
@@ -1535,6 +1572,61 @@ public class AuthService : IAuthService
         if (activeAdmins.Count <= 1)
             throw new InvalidOperationException($"Cannot {verb} the last active admin.");
     }
+
+    /// <summary>
+    /// Refuses the staff links that can only end in a login that sees nothing (Oct 2026: a
+    /// teacher with two "Scott Davis" records saw no stars, and nothing said why). A record
+    /// that does not exist, a former record (ProgramAccessService gives it no scope), and a
+    /// record another login already holds are all rejected. ArgumentException is a 400 whose
+    /// detail the Users screen shows. <paramref name="exceptUserId"/> is the user being edited
+    /// (Guid.Empty on create), so a user never collides with their own link.
+    /// </summary>
+    private async Task ValidateStaffLinkAsync(Guid staffMemberId, Guid exceptUserId)
+    {
+        var staff = await _uow.Staff.GetByIdAsync(staffMemberId)
+            ?? throw new ArgumentException("That staff record doesn't exist.");
+
+        if (staff.EndDate is not null)
+            throw new ArgumentException(
+                $"That staff record ({staff.FullName}) is marked as former, so this login would see no stars. " +
+                "Restore it to active on the Onboarding page, or pick the current staff record.");
+
+        var other = await _uow.Users.FirstOrDefaultAsync(
+            u => u.StaffMemberId == staffMemberId && u.Id != exceptUserId);
+        if (other is not null)
+            throw new ArgumentException(
+                $"That staff record ({staff.FullName}) is already linked to the login {other.Email}. " +
+                "Unlink it there first, or pick a different staff record.");
+    }
+
+    /// <summary>
+    /// <see cref="ValidateStaffLinkAsync"/>, but a rejection leaves a failed row. AuthController
+    /// has no [Audited] filter, so without this a refused link would leave nothing in the log.
+    /// </summary>
+    private async Task ValidateStaffLinkAuditedAsync(
+        Guid staffMemberId, Guid exceptUserId, string action, Guid? entityId, string email)
+    {
+        try
+        {
+            await ValidateStaffLinkAsync(staffMemberId, exceptUserId);
+        }
+        catch (ArgumentException ex)
+        {
+            await _audit.RecordAsync(new AuditEntry
+            {
+                Action = action,
+                EntityType = "User",
+                EntityId = entityId,
+                Succeeded = false,
+                Summary = $"Rejected staff link for {email}",
+                Metadata = Json(new { staffMemberId, reason = ex.Message }),
+            });
+            throw;
+        }
+    }
+
+    private async Task<string?> StaffNameAsync(Guid? staffMemberId) =>
+        staffMemberId is { } id ? (await _uow.Staff.GetByIdAsync(id))?.FullName : null;
 
     // Known-compromised defaults that must never be (re)set: the original seeder password
     // was committed to a public repo, so it is permanently burned (#21).

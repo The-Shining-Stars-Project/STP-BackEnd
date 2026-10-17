@@ -177,6 +177,11 @@ public class AttendanceController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Adds a note to one star's attendance record. A blank note, one over 1000 characters, or
+    /// an unknown note type is a 400 with a readable detail (Oct 2026; the service throws
+    /// ArgumentException and GlobalExceptionHandler maps it).
+    /// </summary>
     [HttpPost("{recordId:guid}/notes")]
     [Audited("attendance.note.create", "AttendanceRecord")]
     public async Task<ActionResult<AttendanceNoteDto>> AddNote(Guid recordId, [FromBody] CreateAttendanceNoteDto dto)

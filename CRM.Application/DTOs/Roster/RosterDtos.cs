@@ -53,3 +53,17 @@ public class UpsertRosterAssignmentDto
     public bool CountedInRatio { get; set; } = true;
     public string? Notes { get; set; }
 }
+
+/// <summary>The term to fill from each enrolment's most recent earlier term (POST /api/roster/copy-forward).</summary>
+public class CopyRosterForwardDto
+{
+    public int Year { get; set; }
+    /// <summary>Quarter number 1–4.</summary>
+    public int Quarter { get; set; }
+}
+
+public class CopyRosterForwardResultDto
+{
+    /// <summary>Assignments created in the target term (enrolments that already had one are left alone).</summary>
+    public int Copied { get; set; }
+}

@@ -16,8 +16,14 @@ public class CohortController : ControllerBase
 
     public CohortController(ICohortRollUpService service) => _service = service;
 
-    /// <summary>The cohort roll-up for a month (per-skill level counts from confirmed snapshots), optionally by program.</summary>
+    /// <summary>
+    /// The cohort roll-up for a month (per-skill level counts from weekly scores, confirmed
+    /// levels overriding), optionally by program. Rows cover only the progress framework(s)
+    /// in scope: the program's Track, or every accessible program's Track for "All programs".
+    /// </summary>
+    // Audited like the drill-down (Oct 2026); counts only, so the entity is the aggregate.
     [HttpGet("roll-up")]
+    [Audited("cohort.rollup.view", "CohortRollUp")]
     public async Task<ActionResult<CohortRollUpDto>> GetRollUp([FromQuery] string month, [FromQuery] Guid? programId)
     {
         if (string.IsNullOrWhiteSpace(month)) return BadRequest("month is required (yyyy-MM).");
@@ -25,7 +31,7 @@ public class CohortController : ControllerBase
     }
 
     /// <summary>
-    /// The Stars behind one roll-up count — answers "which students", not just "how many".
+    /// The Stars behind one roll-up count — answers "which stars", not just "how many".
     /// Audited: this returns named children at a named developmental level, which is exactly
     /// the kind of read the audit log exists to record.
     /// </summary>

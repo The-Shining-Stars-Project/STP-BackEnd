@@ -341,10 +341,10 @@ public class AttendanceService : IAttendanceService
         // Scoped to the caller's programs (#1). Filtering the sessions is enough — every
         // record hangs off one, so out-of-scope records never enter the result.
         var access = await _access.ForUserAsync(userId);
-        var sessionIds = (await _uow.Sessions.ListAsync(s => s.Date >= today && s.Date < tomorrow, ct))
+        var sessions = (await _uow.Sessions.ListAsync(s => s.Date >= today && s.Date < tomorrow, ct))
             .Where(s => access.CanAccess(s.ProgramId))
-            .Select(s => s.Id)
-            .ToHashSet();
+            .ToDictionary(s => s.Id);
+        var sessionIds = sessions.Keys.ToHashSet();
         if (sessionIds.Count == 0) return new List<AttendanceRosterEntryDto>();
 
         var records = await _uow.Attendance.ListAsync(r => sessionIds.Contains(r.SessionId));
@@ -360,14 +360,17 @@ public class AttendanceService : IAttendanceService
             .Select(r =>
             {
                 var p = participants[r.ParticipantId];
-                var prog = programs.GetValueOrDefault(p.ProgramId);
+                // Label the row with the SESSION's program, not the star's main one (Oct 2026):
+                // a dual-enrolled star in today's Part-time session was listed under Pathways.
+                var programId = sessions[r.SessionId].ProgramId;
+                var prog = programs.GetValueOrDefault(programId);
                 return new AttendanceRosterEntryDto
                 {
                     RecordId = r.Id,
                     ParticipantId = p.Id,
                     FullName = p.FullName,
                     Initials = p.Initials,
-                    ProgramId = p.ProgramId,
+                    ProgramId = programId,
                     ProgramSlug = prog?.Slug ?? string.Empty,
                     ProgramName = prog?.Name ?? string.Empty,
                     Status = r.Status,
@@ -390,11 +393,28 @@ public class AttendanceService : IAttendanceService
 
         (await _access.ForUserAsync(userId)).Require(session.ProgramId);
 
+        // Refuse a bad note with a readable 400 rather than letting SQL reject it (Oct 2026).
+        // Whether a note may be added after Submit is unchanged.
+        var content = dto.Content?.Trim() ?? string.Empty;
+        if (content.Length == 0)
+            throw new ArgumentException("A note can't be empty.");
+        if (content.Length > AttendanceNoteRules.ContentMaxLength)
+            throw new ArgumentException(
+                $"A note can be at most {AttendanceNoteRules.ContentMaxLength} characters (this one is {content.Length}).");
+
+        // Blank means the default kind, as when the field is left out of the request.
+        var noteType = string.IsNullOrWhiteSpace(dto.NoteType)
+            ? AttendanceNoteRules.Observation
+            : dto.NoteType.Trim().ToLowerInvariant();
+        if (!AttendanceNoteRules.NoteTypes.Contains(noteType))
+            throw new ArgumentException(
+                $"A note must be an \"{AttendanceNoteRules.Observation}\" or a \"{AttendanceNoteRules.Concern}\".");
+
         var note = new AttendanceNote
         {
             AttendanceRecordId = recordId,
-            Content = dto.Content.Trim(),
-            NoteType = dto.NoteType,
+            Content = content,
+            NoteType = noteType,
         };
         await _uow.AttendanceNotes.AddAsync(note);
         await _uow.SaveChangesAsync();

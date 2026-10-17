@@ -20,7 +20,10 @@ public class ProgramsController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<ProgramSummaryDto>>> GetAll(CancellationToken ct) =>
         Ok(await _service.GetAllAsync(ct));
 
-    /// <summary>The caller's in-scope programs (all for an Admin; assigned programs for staff). Literal route wins over {slug}.</summary>
+    /// <summary>
+    /// The caller's in-scope programs, from IProgramAccessService: all for an Admin, assigned
+    /// programs for active staff, none for a former or unlinked staff login. Literal route wins over {slug}.
+    /// </summary>
     [HttpGet("mine")]
     public async Task<ActionResult<IReadOnlyList<ProgramSummaryDto>>> GetMine(CancellationToken ct) =>
         Ok(await _service.GetForUserAsync(User.GetUserId(), ct));

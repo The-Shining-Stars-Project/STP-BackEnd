@@ -25,10 +25,13 @@ public class ParticipantService : IParticipantService
     {
         // Scoped to the caller's programs (#1) — a teacher listing participants must not
         // see (or be able to enumerate the ids of) children in programs they don't teach.
+        // Either enrolment counts (Oct 2026): a Part-time teacher's list includes a star whose
+        // main program is Pathways and second program is theirs. This list also feeds the
+        // Dashboard, Weekly Data and the Enroll-star picker.
         var access = await _access.ForUserAsync(userId);
 
         var participants = (await _uow.Participants.GetAllAsync(ct))
-            .Where(p => access.CanAccess(p.ProgramId))
+            .Where(p => access.CanAccessStar(p))
             .ToList();
         if (participants.Count == 0) return new List<ParticipantSummaryDto>();
 
@@ -111,6 +114,8 @@ public class ParticipantService : IParticipantService
         // You may only enrol a child into a program you run.
         var access = await _access.ForUserAsync(userId);
         access.Require(dto.ProgramId);
+        // Main and second program must differ (Oct 2026); the CSV import already refuses it.
+        if (dto.SecondaryProgramId == dto.ProgramId) throw SameProgramTwice();
 
         var participant = new Participant
         {
@@ -167,6 +172,19 @@ public class ParticipantService : IParticipantService
             var access = await _access.ForUserAsync(userId);
             access.Require(dto.ProgramId.Value);
         }
+
+        // The update is partial, so check the enrolment the star will END UP with, before
+        // anything is applied. "Enroll star" used to send only { programId } for a star whose
+        // second program was already that one, leaving main == second and silently dropping
+        // their old main program (Oct 2026). Only a change is refused: a star already saved
+        // that way (from before this guard) can still have its status or name edited.
+        var newProgramId = dto.ProgramId ?? participant.ProgramId;
+        var newSecondaryId =
+            dto.SecondaryProgramId is { } requestedSecId && requestedSecId != participant.SecondaryProgramId ? requestedSecId
+            : dto.ClearSecondaryProgram ? null
+            : participant.SecondaryProgramId;
+        var enrolmentChanged = newProgramId != participant.ProgramId || newSecondaryId != participant.SecondaryProgramId;
+        if (enrolmentChanged && newSecondaryId == newProgramId) throw SameProgramTwice();
 
         if (dto.FullName is not null) participant.FullName = dto.FullName;
         if (dto.Initials is not null) participant.Initials = dto.Initials;
@@ -250,6 +268,10 @@ public class ParticipantService : IParticipantService
         await _uow.SaveChangesAsync();
         return true;
     }
+
+    /// <summary>A dual enrolment needs two different programs (→ 400).</summary>
+    private static ArgumentException SameProgramTwice() =>
+        new("A star's second program can't be the same as their main program.");
 
     // ── Emergency contacts ──────────────────────────────────────────────────────
     // Stored newline-joined in one column; exposed as a list. Blank lines are dropped,

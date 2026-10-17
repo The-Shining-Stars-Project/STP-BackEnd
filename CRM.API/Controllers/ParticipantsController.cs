@@ -62,7 +62,8 @@ public class ParticipantsController : ControllerBase
     }
 
     /// <summary>
-    /// Lists participants in the caller's programs (#1). Optional paging (#25): pass
+    /// Lists participants in the caller's programs (#1), through either enrolment: a star whose
+    /// second program is the caller's is included (Oct 2026). Optional paging (#25): pass
     /// <c>?page=1&amp;pageSize=50</c> (pageSize capped at 200) to get one page plus an
     /// <c>X-Total-Count</c> header; omit both to get the full in-scope list.
     /// </summary>

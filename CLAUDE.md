@@ -84,6 +84,13 @@ implementing Application interfaces.
   linked staff record sees nothing; that's a setup issue, not a bug. Former staff (with
   `EndDate`) lose access.
 - Dual enrollment is `Participant.SecondaryProgramId`. Roster rows are per star per program.
+  Lists a teacher reaches must include stars through EITHER enrolment: use
+  `ProgramAccess.CanAccessStar` / `Participant.IsEnrolledIn` on loaded rows (they are C#, so in
+  EF predicates write `p.ProgramId == id || p.SecondaryProgramId == id`). Counts (EnrolledCount,
+  Cohort Roll-Up, Reports) stay main-program only until the client decides otherwise.
+- Roster assignments are per quarter and Per-Star plans per month, and nothing rolls over on its
+  own. Planning shows the latest EARLIER plan or roster row as a carry-over hint (none if that
+  teacher has left; never a later term), and `POST /api/roster/copy-forward` fills a term's gaps.
 - Notifications are in-app only (no email).
 
 ## Before handing work back

@@ -68,15 +68,14 @@ public class ProgramService : IProgramService
 
     public async Task<IReadOnlyList<ProgramSummaryDto>> GetForUserAsync(Guid userId, CancellationToken ct = default)
     {
-        var all = await GetAllAsync(ct);
-        var user = await _uow.Users.GetByIdAsync(userId);
-        if (user is null) return new List<ProgramSummaryDto>();
-        if (user.Role == Domain.Enums.UserRole.Admin) return all;
-        if (user.StaffMemberId is not { } staffId) return new List<ProgramSummaryDto>();
+        // The same scope every other read uses (Oct 2026). This used to read the staff link
+        // itself and skipped the EndDate and IsActive checks, so a login linked to a former
+        // staff record still got program chips that then 403'd when opened.
+        var access = await _access.ForUserAsync(userId);
+        if (!access.IsAdmin && access.AssignedProgramIds.Count == 0) return new List<ProgramSummaryDto>();
 
-        var assignments = await _uow.GetStaffProgramAssignmentsAsync();
-        var allowed = assignments.Where(a => a.StaffMemberId == staffId).Select(a => a.ProgramId).ToHashSet();
-        return all.Where(p => allowed.Contains(p.Id)).ToList();
+        var all = await GetAllAsync(ct);
+        return access.IsAdmin ? all : all.Where(p => access.CanAccess(p.Id)).ToList();
     }
 
     public async Task<ProgramSummaryDto?> GetBySlugAsync(string slug)
@@ -96,19 +95,30 @@ public class ProgramService : IProgramService
         // stars on at all, which is how the gap was noticed.
         (await _access.ForUserAsync(userId)).Require(program.Id);
 
-        // Filter in SQL (#11), not after loading the whole table.
-        var participants = (await _uow.Participants.ListAsync(p => p.ProgramId == program.Id)).ToList();
+        // Filter in SQL (#11), not after loading the whole table. Stars whose SECOND program
+        // is this one are listed too (Oct 2026: dual-enrolled stars only showed on their main
+        // program's page). The page tells them apart by ProgramId != this program's id.
+        // EnrolledCount and AttendancePct below stay main-program only until the client
+        // decides whether a dual star counts twice (plan D4).
+        var programId = program.Id;
+        var participants = (await _uow.Participants.ListAsync(
+            p => p.ProgramId == programId || p.SecondaryProgramId == programId)).ToList();
 
         // Real per-participant attendance % (#8), scoped to this program's participants.
         var participantIds = participants.Select(p => p.Id).ToHashSet();
         var pctMap = AttendanceStats.PercentByParticipant(
             await _uow.Attendance.ListAsync(r => participantIds.Contains(r.ParticipantId)));
 
-        var events = (await _uow.CalendarEvents.GetAllAsync())
-            .Where(e => e.ProgramId == program.Id && e.IsUpcoming)
+        // "Upcoming" means dated today or later on the org clock (Oct 2026). The stored
+        // IsUpcoming column is only written when an event is created or edited and is never
+        // recomputed, so past events stayed "upcoming" forever and pushed real ones out of
+        // the five shown.
+        var today = _clock.Today;
+        var events = (await _uow.CalendarEvents.ListAsync(e => e.ProgramId == programId && e.Date >= today))
             .OrderBy(e => e.Date)
             .Take(5)
             .ToList();
+        var programNames = programs.ToDictionary(p => p.Id, p => p.Name);
 
         // Staff list: resolve via StaffProgramAssignments so program detail actually
         // returns its staff (was a dead query + always-empty list).
@@ -140,8 +150,11 @@ public class ProgramService : IProgramService
                 FullName = p.FullName,
                 Initials = p.Initials,
                 Status = p.Status,
+                // The star's own main program, so a second-program star reads "main: Pathways".
                 ProgramId = p.ProgramId,
-                ProgramName = program.Name,
+                ProgramName = programNames.GetValueOrDefault(p.ProgramId, string.Empty),
+                SecondaryProgramId = p.SecondaryProgramId,
+                SecondaryProgramName = p.SecondaryProgramId is { } sec ? programNames.GetValueOrDefault(sec) : null,
                 AttendancePct = pctMap.GetValueOrDefault(p.Id, 0),
                 StartDate = p.StartDate.ToString("yyyy-MM-dd"),
                 HasDocAlerts = DocumentAlerts.For(p),
@@ -156,7 +169,8 @@ public class ProgramService : IProgramService
                 TimeRange = e.TimeRange,
                 ProgramId = e.ProgramId,
                 ProgramName = program.Name,
-                IsUpcoming = e.IsUpcoming,
+                // Same read-time rule as CalendarService, not the stale stored flag.
+                IsUpcoming = e.Date.Date >= today,
             }).ToList(),
             Staff = staff
                 .OrderBy(s => s.FullName)

@@ -48,6 +48,15 @@ public sealed class ProgramAccess
     /// <summary>True when the caller may read or write data belonging to this program.</summary>
     public bool CanAccess(Guid programId) => IsAdmin || AssignedProgramIds.Contains(programId);
 
+    /// <summary>
+    /// True when the caller may see this star through EITHER enrolment. Lists must use this,
+    /// not <c>CanAccess(p.ProgramId)</c>: a Part-time teacher works with a dual-enrolled star
+    /// whose primary program is Pathways (Oct 2026: "Chris and Skyler only show on Pathways").
+    /// </summary>
+    public bool CanAccessStar(Participant participant) =>
+        CanAccess(participant.ProgramId)
+        || (participant.SecondaryProgramId is { } sec && CanAccess(sec));
+
     /// <summary>Throws <see cref="UnauthorizedAccessException"/> (→ 403) unless the caller may touch this program.</summary>
     public void Require(Guid programId)
     {

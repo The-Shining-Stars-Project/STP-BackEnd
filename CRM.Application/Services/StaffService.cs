@@ -40,9 +40,13 @@ public class StaffService : IStaffService
             .ToDictionary(g => g.Key, g => g.Select(a => a.ProgramId).ToList());
 
         // Renewal alerts: anything dated that comes due within 60 days, or is past due.
+        // A completed ONE-TIME item drops out (Oct 2026: Pam's checked "Gusto Leaves Set up"
+        // still read "expired"), because its date was only a due date. A renewable item keeps
+        // alerting after completion: its ExpiryDate is the next renewal (CPR, TB).
         var today = _clock.Today;
         var alertsByStaff = (await _uow.OnboardingItems.GetAllAsync(ct))
-            .Where(o => o.ExpiryDate is not null && !o.IsNotApplicable)
+            .Where(o => o.ExpiryDate is not null && !o.IsNotApplicable
+                        && (o.RenewalMonths is not null || !o.IsCompleted))
             .Select(o => (o.StaffMemberId, Alert: new TrainingAlertDto
             {
                 ItemId = o.Id,

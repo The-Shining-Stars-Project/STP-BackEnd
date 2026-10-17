@@ -32,6 +32,8 @@ public class TasksController : ControllerBase
 
     // EntityType is Project, not ProjectTask: the route names the project and the new task's
     // own id is not in it, so the row identifies the container that changed.
+    // The service rejects a blank name or a status a new task can't start in (400) and an
+    // unknown project (404); GlobalExceptionHandler maps both, so the row records the status.
     [HttpPost("projects/{projectId:guid}/tasks")]
     [Audited("task.create", "Project", IdRouteKey = "projectId")]
     public async Task<ActionResult<ProjectTaskDto>> AddTask(Guid projectId, [FromBody] CreateTaskDto dto)

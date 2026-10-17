@@ -26,6 +26,8 @@ public class ProjectTaskDto
     public TaskStatus TaskStatus { get; set; }
     public TaskPriority Priority { get; set; }
     public string? DueDate { get; set; }
+
+    /// <summary>Computed when read: past its due date and not Done (see <c>TaskService.IsOverdue</c>).</summary>
     public bool IsOverdue { get; set; }
 }
 
@@ -45,6 +47,12 @@ public class CreateTaskDto
     public Guid? AssignedToId { get; set; }
     public TaskPriority Priority { get; set; } = TaskPriority.Medium;
     public DateTime? DueDate { get; set; }
+
+    /// <summary>
+    /// The status chip picked in the Add task modal (Oct 2026: it was collected but never
+    /// sent). Null means Upcoming. Only Upcoming, InProgress and Blocked are accepted.
+    /// </summary>
+    public TaskStatus? Status { get; set; }
 }
 
 public class UpdateTaskDto

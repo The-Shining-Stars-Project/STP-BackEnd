@@ -30,14 +30,13 @@ public class CohortRollUpService : ICohortRollUpService
     {
         var month = await LoadMonthAsync(userId, monthKey, programId);
 
-        var subSkills = (await _uow.SubSkills.GetAllAsync()).Where(s => s.IsActive).ToList();
-        var areas = (await _uow.ObjectiveAreas.GetAllAsync()).ToDictionary(a => a.Id);
         var bySkill = month.Levels
             .GroupBy(l => l.Key.SubSkillId)
             .ToDictionary(g => g.Key, g => g.Select(l => l.Value).ToList());
 
-        var rows = subSkills
-            .OrderBy(s => s.SectionNumber).ThenBy(s => s.SortOrder)
+        // month.Skills is already limited to the scope's tracks and in display order.
+        var rows = month.Skills
+            .Where(s => s.IsActive)
             .Select(skill =>
             {
                 var list = bySkill.GetValueOrDefault(skill.Id) ?? new();
@@ -45,15 +44,17 @@ public class CohortRollUpService : ICohortRollUpService
                 var inter = list.Count(l => l == ProgressLevel.Intermediate);
                 var exp = list.Count(l => l == ProgressLevel.Expert);
                 var na = list.Count(l => l == ProgressLevel.NotApplicable);
-                var area = areas.GetValueOrDefault(skill.ObjectiveAreaId);
+                var area = month.Areas[skill.ObjectiveAreaId];
 
                 return new CohortRollUpRowDto
                 {
                     SubSkillId = skill.Id,
                     SubSkillName = skill.Name,
                     SectionNumber = skill.SectionNumber,
-                    ObjectiveAreaName = area?.Name ?? "",
-                    ObjectiveAreaColorHex = area?.ColorHex ?? "",
+                    ObjectiveAreaId = area.Id,
+                    Track = area.Track,
+                    ObjectiveAreaName = area.Name,
+                    ObjectiveAreaColorHex = area.ColorHex,
                     NoviceCount = nov,
                     IntermediateCount = inter,
                     ExpertCount = exp,
@@ -84,7 +85,8 @@ public class CohortRollUpService : ICohortRollUpService
     {
         // Built from the SAME per-(star, skill) map as the counts. If these two ever drift, a
         // user clicks a count of 7 and is shown 5 names, which reads as data loss rather
-        // than as two different questions being asked.
+        // than as two different questions being asked. The same map also applies the track
+        // rule, so a skill the roll-up leaves out (another framework's) lists no stars.
         var month = await LoadMonthAsync(userId, monthKey, programId);
 
         var ids = month.Levels
@@ -113,6 +115,8 @@ public class CohortRollUpService : ICohortRollUpService
     private sealed record MonthLevels(
         string? ProgramName,
         IReadOnlyList<Participant> Stars,
+        IReadOnlyList<SubSkill> Skills,
+        IReadOnlyDictionary<Guid, ObjectiveArea> Areas,
         Dictionary<(Guid ParticipantId, Guid SubSkillId), ProgressLevel> Levels,
         int ConfirmedCount);
 
@@ -122,6 +126,12 @@ public class CohortRollUpService : ICohortRollUpService
     /// dual-enrolled star counts toward the program on their record, not both; the client
     /// has not asked for double counting, and the counts and the drill-down must agree.
     /// Soft-deleted stars fall out because the participant list never includes them.
+    ///
+    /// Skills are limited to the scope's progress frameworks (Oct 2026: Pathways pillars showed
+    /// under Part-time programs). One program means its <see cref="CrmProgram.Track"/>; "All
+    /// programs" means the tracks of every program the caller can access. Never the slug:
+    /// production slugs are hand-made ("pathways:-manteca"). Levels on out-of-scope skills are
+    /// dropped here, so the counts, the star total and the drill-down all agree.
     /// </summary>
     private async Task<MonthLevels> LoadMonthAsync(Guid userId, string monthKey, Guid? programId)
     {
@@ -130,24 +140,48 @@ public class CohortRollUpService : ICohortRollUpService
         var access = await _access.ForUserAsync(userId);
         string? programName = null;
         IReadOnlyList<Participant> stars;
+        HashSet<ProgramTrack> tracks;
         if (programId is { } pid)
         {
             access.Require(pid);
-            programName = (await _uow.Programs.GetByIdAsync(pid))?.Name;
+            var program = await _uow.Programs.GetByIdAsync(pid);
+            programName = program?.Name;
+            tracks = program is null ? [] : [program.Track];
             stars = await _uow.Participants.ListAsync(p => p.ProgramId == pid);
         }
         else
         {
+            tracks = (await _uow.Programs.GetAllAsync())
+                .Where(p => access.CanAccess(p.Id))
+                .Select(p => p.Track)
+                .ToHashSet();
             stars = (await _uow.Participants.GetAllAsync()).Where(p => access.CanAccess(p.ProgramId)).ToList();
         }
 
+        // Track lives on the objective area, not the sub-skill. Order: Part-time before
+        // Pathways (enum order), then area, then section and skill. The area id tie-break
+        // keeps each area's rows together even if two areas ever share a SortOrder.
+        var areas = (await _uow.ObjectiveAreas.GetAllAsync())
+            .Where(a => tracks.Contains(a.Track))
+            .ToDictionary(a => a.Id);
+        var skills = (await _uow.SubSkills.GetAllAsync())
+            .Where(s => areas.ContainsKey(s.ObjectiveAreaId))
+            .OrderBy(s => areas[s.ObjectiveAreaId].Track)
+            .ThenBy(s => areas[s.ObjectiveAreaId].SortOrder)
+            .ThenBy(s => s.ObjectiveAreaId)
+            .ThenBy(s => s.SectionNumber)
+            .ThenBy(s => s.SortOrder)
+            .ToList();
+
         var starIds = stars.Select(s => s.Id).ToHashSet();
+        var skillIds = skills.Select(s => s.Id).ToHashSet();
         var levels = new Dictionary<(Guid, Guid), ProgressLevel>();
-        if (starIds.Count == 0) return new MonthLevels(programName, stars, levels, 0);
+        if (starIds.Count == 0 || skillIds.Count == 0)
+            return new MonthLevels(programName, stars, skills, areas, levels, 0);
 
         // Contains translates to IN, so a program-scoped month stays a SQL-side filter (#29).
         var entries = await _uow.WeeklyDataEntries.ListAsync(
-            e => e.MonthKey == monthKey && starIds.Contains(e.ParticipantId));
+            e => e.MonthKey == monthKey && starIds.Contains(e.ParticipantId) && skillIds.Contains(e.SubSkillId));
         var thresholds = (await _uow.ScoreThresholds.GetAllAsync())
             .Select(t => (t.Level, t.MinAverage)).ToList();
 
@@ -160,11 +194,12 @@ public class CohortRollUpService : ICohortRollUpService
         }
 
         var confirmed = await _uow.MonthlyProgressSnapshots.ListAsync(
-            s => s.MonthKey == monthKey && s.IsConfirmed && starIds.Contains(s.ParticipantId));
+            s => s.MonthKey == monthKey && s.IsConfirmed
+                 && starIds.Contains(s.ParticipantId) && skillIds.Contains(s.SubSkillId));
         foreach (var snap in confirmed)
             levels[(snap.ParticipantId, snap.SubSkillId)] = snap.Level;
 
-        return new MonthLevels(programName, stars, levels, confirmed.Count);
+        return new MonthLevels(programName, stars, skills, areas, levels, confirmed.Count);
     }
 
     private static bool IsRealLevel(ProgressLevel l) =>

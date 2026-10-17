@@ -9,11 +9,13 @@ public class ReportsService : IReportsService
 {
     private readonly IUnitOfWork _uow;
     private readonly IStatsQueries _stats;
+    private readonly IOrgClock _clock;
 
-    public ReportsService(IUnitOfWork uow, IStatsQueries stats)
+    public ReportsService(IUnitOfWork uow, IStatsQueries stats, IOrgClock clock)
     {
         _uow = uow;
         _stats = stats;
+        _clock = clock;
     }
 
     public async Task<ReportsDto> GetAsync(CancellationToken ct = default)
@@ -23,7 +25,9 @@ public class ReportsService : IReportsService
         // endpoint no longer scales with the size of the attendance ledger.
         var participants = await _uow.Participants.GetAllAsync(ct);
         var programs = await _uow.Programs.GetAllAsync(ct);
-        var staff = await _uow.Staff.GetAllAsync(ct);
+        // Current staff only (Oct 2026: "remove former under Staff onboarding"). A former
+        // record has an EndDate; leaving it in inflated "x of y fully onboarded".
+        var staff = (await _uow.Staff.GetAllAsync(ct)).Where(s => s.EndDate is null).ToList();
         var tasks = await _uow.Tasks.GetAllAsync(ct);
 
         var attendanceAgg = await _stats.GetParticipantAttendanceAsync(ct);
@@ -53,6 +57,7 @@ public class ReportsService : IReportsService
             .OrderBy(p => p.Name)
             .ToList();
 
+        var today = _clock.Today;
         var totals = new ReportTotalsDto
         {
             TotalParticipants = participants.Count,
@@ -65,7 +70,8 @@ public class ReportsService : IReportsService
             FullyOnboardedStaff = staff.Count(s => s.OnboardingProgressPct == 100),
             AvgAttendancePct = participants.Count > 0 ? (int)Math.Round(participants.Average(p => (double)pctMap.GetValueOrDefault(p.Id, 0))) : 0,
             OpenTasks = tasks.Count(t => t.Status != Domain.Enums.TaskStatus.Done),
-            OverdueTasks = tasks.Count(t => t.IsOverdue || t.Status == Domain.Enums.TaskStatus.Overdue),
+            // Same read-time rule as the Tasks page; the stored flag was never set in production.
+            OverdueTasks = tasks.Count(t => TaskService.IsOverdue(t, today)),
         };
 
         // Per-star attendance incl. absences — only statuses that track attendance.
@@ -98,7 +104,7 @@ public class ReportsService : IReportsService
         var staffOnboarding = staff
             .OrderBy(s => s.OnboardingProgressPct)
             .ThenBy(s => s.FullName)
-            .Select(s => new StaffOnboardingReportDto { Name = s.FullName, Pct = s.OnboardingProgressPct })
+            .Select(s => new StaffOnboardingReportDto { Id = s.Id, Name = s.FullName, Pct = s.OnboardingProgressPct })
             .ToList();
 
         return new ReportsDto

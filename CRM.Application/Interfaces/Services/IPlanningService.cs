@@ -5,8 +5,9 @@ namespace CRM.Application.Interfaces.Services;
 public interface IPlanningService
 {
     /// <summary>
-    /// Per-Star plan rows for a month, limited to the caller's programs (#1).
-    /// Optionally narrowed further to a single program.
+    /// Per-Star plan rows for a month, limited to stars the caller can see through either
+    /// enrolment (#1). Optionally narrowed to the stars enrolled in one program (primary or
+    /// secondary). Each star appears once.
     /// </summary>
     Task<IReadOnlyList<PerStarPlanDto>> GetPerStarPlansAsync(Guid userId, string monthKey, Guid? programId);
 

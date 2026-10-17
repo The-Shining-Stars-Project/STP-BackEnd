@@ -125,6 +125,21 @@ public class SitesAndRosterTests
     }
 
     [Fact]
+    public async Task The_primary_site_is_listed_first_even_when_the_join_has_it_later_or_not_at_all()
+    {
+        // Pins the shared site-order helper copy-forward reuses (Oct 2026).
+        var joined = new RosterAssignment { ParticipantId = StarId, ProgramId = ProgramId, Year = 2026, Quarter = 3, SiteId = Manteca };
+        _uow.RosterAssignmentsRepo.Items.Add(joined);
+        _uow.RosterAssignmentSites.Add(new RosterAssignmentSite { RosterAssignmentId = joined.Id, SiteId = Mjc });
+        _uow.RosterAssignmentSites.Add(new RosterAssignmentSite { RosterAssignmentId = joined.Id, SiteId = Manteca });
+        var legacy = new RosterAssignment { ParticipantId = StarId, ProgramId = ProgramId, Year = 2026, Quarter = 2, SiteId = Mjc };
+        _uow.RosterAssignmentsRepo.Items.Add(legacy);
+
+        Assert.Equal(new[] { Manteca, Mjc }, Assert.Single(await _roster.GetRosterAsync(UserId, 2026, 3, null)).SiteIds);
+        Assert.Equal(new[] { Mjc }, Assert.Single(await _roster.GetRosterAsync(UserId, 2026, 2, null)).SiteIds);
+    }
+
+    [Fact]
     public async Task The_single_site_form_still_works()
     {
         var entry = await _roster.UpsertAssignmentAsync(UserId, new UpsertRosterAssignmentDto

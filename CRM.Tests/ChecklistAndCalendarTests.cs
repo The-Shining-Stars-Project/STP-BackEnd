@@ -153,6 +153,37 @@ public class ChecklistAndCalendarTests
         Assert.InRange(alert.DaysUntil, 25, 35);
     }
 
+    // Oct 2026: Pam's checked "Gusto Leaves Set up" (one-time, due Sep 16) still showed as
+    // expired on the dashboard. A one-time item's date is a due date, so finishing it ends the
+    // alert; the renewable case above must keep alerting after completion.
+    [Fact]
+    public async Task Completed_one_time_item_past_its_due_date_raises_no_alert()
+    {
+        await SetTemplateAsync(("HR", "Gusto Leaves Set up", null));
+        var id = await HireAsync("Pam Ortiz");
+        var item = (await _staff.GetByIdAsync(id))!.OnboardingItems.Single();
+        await _staff.SetOnboardingItemAsync(id, item.Id,
+            new SetOnboardingItemDto { IsCompleted = true, ExpiryDate = _clock.Today.AddDays(-30) });
+
+        var summary = (await _staff.GetAllAsync()).Single(s => s.Id == id);
+        Assert.Empty(summary.TrainingAlerts);
+    }
+
+    [Fact]
+    public async Task Incomplete_one_time_item_past_due_still_alerts()
+    {
+        await SetTemplateAsync(("HR", "Gusto Leaves Set up", null));
+        var id = await HireAsync("Pam Ortiz");
+        var item = (await _staff.GetByIdAsync(id))!.OnboardingItems.Single();
+        await _staff.SetOnboardingItemAsync(id, item.Id,
+            new SetOnboardingItemDto { IsCompleted = false, ExpiryDate = _clock.Today.AddDays(-30) });
+
+        var summary = (await _staff.GetAllAsync()).Single(s => s.Id == id);
+        var alert = Assert.Single(summary.TrainingAlerts);
+        Assert.Equal("Gusto Leaves Set up", alert.Label);
+        Assert.Equal(-30, alert.DaysUntil);
+    }
+
     // ── Calendar ────────────────────────────────────────────────────────────────
 
     [Fact]

@@ -116,6 +116,71 @@ public class RosterService : IRosterService
         return BuildEntry(participant, programId, isSecondary, existing, dto.Year, dto.Quarter, ctx);
     }
 
+    // The roster endpoints refuse anything before this; the upper bound only catches typos.
+    private const int MinYear = 2020;
+    private const int MaxYear = 2100;
+
+    public async Task<CopyRosterForwardResultDto> CopyForwardAsync(Guid userId, CopyRosterForwardDto dto)
+    {
+        if (dto.Quarter is < 1 or > 4) throw new ArgumentException("Quarter must be 1–4.");
+        if (dto.Year is < MinYear or > MaxYear) throw new ArgumentException($"Year must be between {MinYear} and {MaxYear}.");
+        var (year, quarter) = (dto.Year, dto.Quarter);
+
+        // Rows are keyed per quarter and nothing carried over on Oct 1, so every Assigned staff
+        // went blank on Q4 (Oct 2026). Same enrolments, same program scope as the roster view.
+        var access = await _access.ForUserAsync(userId);
+        var enrollments = Enrollments(await _uow.Participants.GetAllAsync(), access).ToList();
+
+        // The target term and everything before it. A LATER term is never a source: filling Q3
+        // after Q4 was set up must not drag Q4's placements backwards.
+        var rows = await _uow.RosterAssignments.ListAsync(
+            r => r.Year < year || (r.Year == year && r.Quarter <= quarter));
+        var alreadyPlaced = rows.Where(r => r.Year == year && r.Quarter == quarter)
+            .Select(r => (r.ParticipantId, r.ProgramId))
+            .ToHashSet();
+        var latestEarlier = rows.Where(r => r.Year < year || (r.Year == year && r.Quarter < quarter))
+            .GroupBy(r => (r.ParticipantId, r.ProgramId))
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.Year).ThenByDescending(r => r.Quarter).First());
+
+        // Never overwrite: an enrolment a coordinator already placed this term keeps its row.
+        var sources = enrollments
+            .Where(e => !alreadyPlaced.Contains((e.Star.Id, e.ProgramId)))
+            .Select(e => latestEarlier.GetValueOrDefault((e.Star.Id, e.ProgramId)))
+            .OfType<RosterAssignment>()
+            .ToList();
+        if (sources.Count == 0) return new CopyRosterForwardResultDto { Copied = 0 };
+
+        var links = await _uow.GetRosterAssignmentSitesAsync(sources.Select(s => s.Id).ToList());
+        var sitesByAssignment = links.GroupBy(l => l.RosterAssignmentId).ToDictionary(g => g.Key, g => g.Select(l => l.SiteId).ToList());
+        // Same rule as a save: retired sites don't come along.
+        var activeSites = (await _uow.Sites.ListAsync(s => s.IsActive)).Select(s => s.Id).ToHashSet();
+        // A former teacher is not carried into a new term; the star shows as unassigned instead.
+        var currentStaff = (await _uow.Staff.ListAsync(s => s.EndDate == null)).Select(s => s.Id).ToHashSet();
+
+        foreach (var src in sources)
+        {
+            var siteIds = SiteIdsOf(src, sitesByAssignment).Where(activeSites.Contains).Distinct().ToList();
+            var copy = new RosterAssignment
+            {
+                ParticipantId = src.ParticipantId,
+                ProgramId = src.ProgramId,
+                Year = year,
+                Quarter = quarter,
+                SiteId = siteIds.Count > 0 ? siteIds[0] : null,
+                StarGroupId = src.StarGroupId,
+                AssignedStaffId = src.AssignedStaffId is { } sid && currentStaff.Contains(sid) ? sid : null,
+                CountedInRatio = src.CountedInRatio,
+                Notes = src.Notes,
+            };
+            await _uow.RosterAssignments.AddAsync(copy);
+            if (siteIds.Count > 0) await _uow.ReplaceRosterAssignmentSitesAsync(copy.Id, siteIds);
+        }
+
+        // One save, so the term is filled completely or not at all.
+        await _uow.SaveChangesAsync();
+        return new CopyRosterForwardResultDto { Copied = sources.Count };
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────────────
 
     private sealed record Ctx(
@@ -167,11 +232,7 @@ public class RosterService : IRosterService
         if (a is not null)
         {
             dto.AssignmentId = a.Id;
-            // Rows from before the join existed have only SiteId; the migration backfilled
-            // them, but stay tolerant of a bare primary either way.
-            var siteIds = ctx.SitesByAssignment.GetValueOrDefault(a.Id) ?? new List<Guid>();
-            if (a.SiteId is { } legacy && !siteIds.Contains(legacy)) siteIds.Insert(0, legacy);
-            else if (a.SiteId is { } prim && siteIds.Count > 0 && siteIds[0] != prim) { siteIds.Remove(prim); siteIds.Insert(0, prim); }
+            var siteIds = SiteIdsOf(a, ctx.SitesByAssignment);
             dto.SiteIds = siteIds;
             dto.SiteNames = siteIds.Select(id => ctx.Sites.GetValueOrDefault(id)?.Name).OfType<string>().ToList();
             dto.SiteId = siteIds.Count > 0 ? siteIds[0] : null;
@@ -184,6 +245,18 @@ public class RosterService : IRosterService
             dto.Notes = a.Notes;
         }
         return dto;
+    }
+
+    /// <summary>
+    /// Every site on the row, primary (<see cref="RosterAssignment.SiteId"/>) first. Rows from
+    /// before the join existed have only SiteId; the migration backfilled them, but stay
+    /// tolerant of a bare primary either way. Returns a new list.
+    /// </summary>
+    private static List<Guid> SiteIdsOf(RosterAssignment a, IReadOnlyDictionary<Guid, List<Guid>> sitesByAssignment)
+    {
+        var siteIds = new List<Guid>(sitesByAssignment.GetValueOrDefault(a.Id) ?? new List<Guid>());
+        if (a.SiteId is { } primary) { siteIds.Remove(primary); siteIds.Insert(0, primary); }
+        return siteIds;
     }
 
     private static IEnumerable<RosterEntryDto> Order(IEnumerable<RosterEntryDto> entries) =>

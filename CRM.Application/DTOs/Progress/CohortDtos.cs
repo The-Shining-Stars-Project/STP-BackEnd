@@ -1,3 +1,5 @@
+using CRM.Domain.Enums;
+
 namespace CRM.Application.DTOs.Progress;
 
 /// <summary>
@@ -19,6 +21,16 @@ public class CohortRollUpRowDto
     public Guid SubSkillId { get; set; }
     public string SubSkillName { get; set; } = string.Empty;
     public int SectionNumber { get; set; }
+
+    /// <summary>
+    /// Group rows by this, not <see cref="SectionNumber"/> (Oct 2026): Part-time and Pathways
+    /// both number their sections from 1, so grouping by section interleaved the two tracks.
+    /// </summary>
+    public Guid ObjectiveAreaId { get; set; }
+
+    /// <summary>The framework the row's objective area belongs to. Rows arrive Part-time first, then Pathways.</summary>
+    public ProgramTrack Track { get; set; }
+
     public string ObjectiveAreaName { get; set; } = string.Empty;
     public string ObjectiveAreaColorHex { get; set; } = string.Empty;
 

@@ -47,8 +47,11 @@ public class ProgramReportDto
     public int Sessions { get; set; }
 }
 
+/// <summary>One current staff member's onboarding progress. Former staff are left out.</summary>
 public class StaffOnboardingReportDto
 {
+    /// <summary>The staff record id. Rows are keyed by it: two records can share a name.</summary>
+    public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public int Pct { get; set; }
 }

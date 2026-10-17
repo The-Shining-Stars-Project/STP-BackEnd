@@ -21,6 +21,7 @@ public class RosterController : ControllerBase
     /// Optionally filtered to one site.
     /// </summary>
     [HttpGet]
+    [Audited("roster.list", "RosterAssignment")]
     public async Task<ActionResult<IReadOnlyList<RosterEntryDto>>> GetRoster(
         [FromQuery] int year, [FromQuery] int quarter, [FromQuery] Guid? siteId)
     {
@@ -31,6 +32,7 @@ public class RosterController : ControllerBase
 
     /// <summary>The caller's in-scope Stars for a term.</summary>
     [HttpGet("my-stars")]
+    [Audited("roster.mystars.list", "RosterAssignment")]
     public async Task<ActionResult<IReadOnlyList<RosterEntryDto>>> GetMyStars(
         [FromQuery] int year, [FromQuery] int quarter)
     {
@@ -50,4 +52,15 @@ public class RosterController : ControllerBase
         var result = await _service.UpsertAssignmentAsync(User.GetUserId(), dto);
         return result is null ? NotFound() : Ok(result);
     }
+
+    /// <summary>
+    /// Fills a term from each in-scope enrolment's most recent earlier term (sites, group,
+    /// staff, ratio, notes). Enrolments that already have a row in the term are left alone.
+    /// Management only (Oct 2026: assignments went blank when Q3 rolled to Q4).
+    /// </summary>
+    [HttpPost("copy-forward")]
+    [Authorize(Policy = "ManagementWrite")]
+    [Audited("roster.copyforward", "RosterAssignment")]
+    public async Task<ActionResult<CopyRosterForwardResultDto>> CopyForward([FromBody] CopyRosterForwardDto dto) =>
+        Ok(await _service.CopyForwardAsync(User.GetUserId(), dto));
 }

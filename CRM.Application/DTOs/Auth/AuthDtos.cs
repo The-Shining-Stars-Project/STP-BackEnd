@@ -30,6 +30,11 @@ public class RegisterUserDto
     public string Password { get; set; } = string.Empty;
 
     public UserRole Role { get; set; } = UserRole.Staff;
+
+    /// <summary>
+    /// Optional staff record for this login. A record that is missing, former, or already
+    /// linked to another login is refused with a 400 (Oct 2026).
+    /// </summary>
     public Guid? StaffMemberId { get; set; }
 }
 
@@ -45,6 +50,11 @@ public class UpdateUserDto
 
     public UserRole? Role { get; set; }
     public bool? IsActive { get; set; }
+
+    /// <summary>
+    /// A new staff link. Checked only when it differs from the current one: a missing, former,
+    /// or already-linked record is a 400 (Oct 2026). Re-sending the current link always works.
+    /// </summary>
     public Guid? StaffMemberId { get; set; }
     /// <summary>True removes the staff link (null alone means "unchanged").</summary>
     public bool ClearStaffMember { get; set; }
@@ -79,8 +89,10 @@ public class UserDto
     /// <summary>
     /// The linked staff record's role (Teacher / Coordinator / Admin), so the UI can tell a
     /// teacher (read + notes) from a coordinator (management edits) without a second call.
-    /// Null when the account has no staff link. Filled on the session read (/me) and the
-    /// admin user list.
+    /// Null when the account has no staff link. Filled on the session read (/me), the sign-in
+    /// response and the admin user list. On the session read and sign-in it is also null when
+    /// the linked record is former, matching the token's staffRole claim (Oct 2026); the admin
+    /// list keeps the record's role so the Users table can still label the link.
     /// </summary>
     public StaffRole? StaffRole { get; set; }
 
