@@ -101,6 +101,14 @@
   "Database": {
     "MigrateOnStartup": false
   },
+  "_comment_Attendance": [
+    "TeacherReopenDays: how many days after a class a teacher may still reopen a submitted",
+    "session to fix marks (client decision, Oct 2026: 7). Managers are never limited.",
+    "0 makes reopen management-only again. In Azure: Attendance__TeacherReopenDays."
+  ],
+  "Attendance": {
+    "TeacherReopenDays": 7
+  },
   "_comment_BlobStorage": [
     "Script PDFs live in Azure Blob Storage, not in the database. Leave both credentials empty",
     "and the API still starts \u2014 PDF uploads answer 503 'not configured' until one is set.",

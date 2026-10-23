@@ -49,4 +49,28 @@ public class TasksController : ControllerBase
         var result = await _service.UpdateTaskAsync(taskId, dto);
         return result is null ? NotFound() : Ok(result);
     }
+
+    // Deletes are permanent and management-only (client, Oct 2026: "button happy"). Teachers
+    // mark a task Done instead, and Done tasks leave the default view.
+    [HttpDelete("tasks/{taskId:guid}")]
+    [Authorize(Policy = "ManagementWrite")]
+    [Audited("task.delete", "ProjectTask", IdRouteKey = "taskId")]
+    public async Task<IActionResult> DeleteTask(Guid taskId) =>
+        await _service.DeleteTaskAsync(taskId) ? NoContent() : NotFound();
+
+    [HttpPut("projects/{projectId:guid}")]
+    [Authorize(Policy = "ManagementWrite")]
+    [Audited("project.update", "Project", IdRouteKey = "projectId")]
+    public async Task<ActionResult<ProjectDto>> UpdateProject(Guid projectId, [FromBody] UpdateProjectDto dto)
+    {
+        var result = await _service.UpdateProjectAsync(projectId, dto);
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    /// <summary>Removes the project and every task in it.</summary>
+    [HttpDelete("projects/{projectId:guid}")]
+    [Authorize(Policy = "ManagementWrite")]
+    [Audited("project.delete", "Project", IdRouteKey = "projectId")]
+    public async Task<IActionResult> DeleteProject(Guid projectId) =>
+        await _service.DeleteProjectAsync(projectId) ? NoContent() : NotFound();
 }

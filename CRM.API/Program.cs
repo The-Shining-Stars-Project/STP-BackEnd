@@ -34,6 +34,8 @@ builder.Services.AddHsts(options =>
 // Register services from each layer via extension methods
 // ---------------------------------------------------------
 builder.Services.AddApplicationServices();
+// Attendance rules the client may tune without a deploy (Attendance__TeacherReopenDays in Azure).
+builder.Services.AddSingleton(builder.Configuration.GetSection("Attendance").Get<AttendanceOptions>() ?? new AttendanceOptions());
 builder.Services.AddInfrastructureServices(builder.Configuration);
 builder.Services.AddPersistenceServices(builder.Configuration);
 

@@ -79,7 +79,9 @@ implementing Application interfaces.
 - Delete is **soft delete** for stars and volunteers. Don't build hard delete (client decision).
 - Attendance counts for **Active and Attention** stars only. `Rescheduled` and
   `NotScheduled` count as marked but are excluded from rates, and only managers may set them.
-  Teachers can submit a session; only managers can reopen one.
+  Teachers can submit a session and reopen it within `Attendance:TeacherReopenDays` of the
+  session date (default 7, client decision Oct 2026); managers reopen any time. Every reopen is
+  audited.
 - Teacher visibility = the programs their linked `StaffMember` is assigned to. A user with no
   linked staff record sees nothing; that's a setup issue, not a bug. Former staff (with
   `EndDate`) lose access.

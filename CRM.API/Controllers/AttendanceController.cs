@@ -102,7 +102,7 @@ public class AttendanceController : ControllerBase
     /// <summary>
     /// Finalizes a session, locking its records. Any assigned teacher may submit (the client
     /// asked for this back the day after it was made management-only); what makes a premature
-    /// submit harmless now is Reopen, which stays management-only.
+    /// submit harmless is Reopen, which teachers can also use for a few days.
     /// </summary>
     [HttpPost("session/{sessionId:guid}/submit")]
     [Audited("attendance.session.submit", "Session")]
@@ -121,16 +121,18 @@ public class AttendanceController : ControllerBase
 
     /// <summary>
     /// Unlocks a submitted session so attendance can be corrected (late arrival, iPad mis-tap).
-    /// Management only, and audited — attendance drives funding, so every unlock has a name on it.
+    /// Managers any time; an assigned teacher within <c>Attendance:TeacherReopenDays</c> of the
+    /// session (client, Oct 2026). Audited — attendance drives funding, so every unlock has a
+    /// name on it.
     /// </summary>
     [HttpPost("session/{sessionId:guid}/reopen")]
-    [Authorize(Policy = "ManagementWrite")]
     [Audited("attendance.session.reopen", "Session")]
     public async Task<IActionResult> ReopenSession(Guid sessionId)
     {
         try
         {
-            var ok = await _service.ReopenSessionAsync(User.GetUserId(), sessionId);
+            var isManager = (await _auth.AuthorizeAsync(User, null, "ManagementWrite")).Succeeded;
+            var ok = await _service.ReopenSessionAsync(User.GetUserId(), sessionId, isManager);
             return ok ? NoContent() : NotFound();
         }
         catch (UnauthorizedAccessException ex)

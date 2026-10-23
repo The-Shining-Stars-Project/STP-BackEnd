@@ -50,7 +50,11 @@ public interface IAttendanceService
     /// Unlocks a submitted session so a late arrival or a mis-tap can be corrected. The
     /// controller restricts this to management; every subsequent mark is audited as usual.
     /// </summary>
-    Task<bool> ReopenSessionAsync(Guid userId, Guid sessionId);
+    /// <summary>
+    /// Unlocks a submitted session. Managers any time; teachers only within
+    /// <see cref="AttendanceOptions.TeacherReopenDays"/> of the session date (403 otherwise).
+    /// </summary>
+    Task<bool> ReopenSessionAsync(Guid userId, Guid sessionId, bool isManager);
     Task<bool> SetSessionHoursAsync(Guid userId, Guid sessionId, decimal? hours);
 
     /// <summary>

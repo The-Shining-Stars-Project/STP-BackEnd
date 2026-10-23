@@ -12,12 +12,15 @@ public class AttendanceService : IAttendanceService
     private readonly IProgramAccessService _access;
     private readonly IOrgClock _clock;
 
-    public AttendanceService(IUnitOfWork uow, IProgramAccessService access, IOrgClock clock)
+    public AttendanceService(IUnitOfWork uow, IProgramAccessService access, IOrgClock clock, AttendanceOptions? options = null)
     {
         _uow = uow;
         _access = access;
         _clock = clock;
+        _options = options ?? new AttendanceOptions();
     }
+
+    private readonly AttendanceOptions _options;
 
     public async Task<AttendanceSessionDto?> GetSessionAsync(Guid userId, Guid sessionId)
     {
@@ -314,12 +317,24 @@ public class AttendanceService : IAttendanceService
         return true;
     }
 
-    public async Task<bool> ReopenSessionAsync(Guid userId, Guid sessionId)
+    public async Task<bool> ReopenSessionAsync(Guid userId, Guid sessionId, bool isManager)
     {
         var session = await _uow.Sessions.GetByIdAsync(sessionId);
         if (session is null) return false;
 
         (await _access.ForUserAsync(userId)).Require(session.ProgramId);
+
+        // Teachers may fix their own recent sessions (client, Oct 2026); older ones need a
+        // coordinator. The window is counted in local calendar days from the session's date,
+        // so a Monday class is still fixable the following Monday.
+        if (!isManager)
+        {
+            var days = _options.TeacherReopenDays;
+            var oldest = _clock.Today.AddDays(-days);
+            if (session.Date.Date < oldest)
+                throw new UnauthorizedAccessException(
+                    $"This session is more than {days} day{(days == 1 ? "" : "s")} old — ask a coordinator to reopen it.");
+        }
 
         // Idempotent: reopening an open session is a no-op rather than an error.
         if (session.Status == SessionStatus.Open) return true;

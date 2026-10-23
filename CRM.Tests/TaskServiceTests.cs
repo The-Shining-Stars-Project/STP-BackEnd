@@ -168,4 +168,88 @@ public class TaskServiceTests
         var done = await _service.UpdateTaskAsync(added.Id, new UpdateTaskDto { TaskStatus = TaskStatus.Done });
         Assert.False(done!.IsOverdue);
     }
+
+    // ── Edit and delete (Oct 2026) ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Draft_is_an_accepted_starting_status_and_round_trips()
+    {
+        var created = await _service.AddTaskAsync(_projectId, new CreateTaskDto { Name = "Idea: costume swap", Status = TaskStatus.Draft });
+        Assert.Equal(TaskStatus.Draft, created.TaskStatus);
+        Assert.Equal(TaskStatus.Draft, (await ReadAsync(created.Id)).TaskStatus);
+    }
+
+    [Fact]
+    public async Task Clearing_the_assignee_and_due_date_needs_the_explicit_flags()
+    {
+        var staffId = Guid.NewGuid();
+        var task = SeedTask(new DateTime(2026, 11, 1));
+        task.AssignedToId = staffId;
+
+        // Null means "leave alone" — the modal sends only what changed.
+        await _service.UpdateTaskAsync(task.Id, new UpdateTaskDto { Name = "Renamed" });
+        Assert.Equal(staffId, task.AssignedToId);
+        Assert.NotNull(task.DueDate);
+
+        await _service.UpdateTaskAsync(task.Id, new UpdateTaskDto { ClearAssignee = true, ClearDueDate = true });
+        Assert.Null(task.AssignedToId);
+        Assert.Null(task.DueDate);
+    }
+
+    [Fact]
+    public async Task A_blank_name_on_update_is_refused()
+    {
+        var task = SeedTask(null);
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.UpdateTaskAsync(task.Id, new UpdateTaskDto { Name = "   " }));
+        Assert.Equal("Task", task.Name);
+    }
+
+    [Fact]
+    public async Task Deleting_a_task_removes_only_that_task()
+    {
+        var gone = SeedTask(null);
+        var kept = SeedTask(null);
+
+        Assert.True(await _service.DeleteTaskAsync(gone.Id));
+        Assert.False(await _service.DeleteTaskAsync(gone.Id));
+
+        Assert.Single(Tasks);
+        Assert.Equal(kept.Id, Tasks[0].Id);
+    }
+
+    [Fact]
+    public async Task Updating_a_project_changes_only_what_was_sent()
+    {
+        var project = Projects.Single();
+        project.DueDate = new DateTime(2026, 12, 1);
+        SeedTask(null);
+
+        var dto = await _service.UpdateProjectAsync(project.Id, new UpdateProjectDto { Status = "Done", Scope = "  " });
+
+        Assert.Equal("done", dto!.Status);
+        Assert.Null(dto.Scope);
+        Assert.Equal("ASCAP Reporting", dto.Title);
+        Assert.Equal("2026-12-01", dto.DueDate);
+        Assert.Single(dto.Tasks);
+
+        await _service.UpdateProjectAsync(project.Id, new UpdateProjectDto { ClearDueDate = true });
+        Assert.Null(project.DueDate);
+        Assert.Null(await _service.UpdateProjectAsync(Guid.NewGuid(), new UpdateProjectDto { Title = "x" }));
+    }
+
+    [Fact]
+    public async Task Deleting_a_project_takes_its_tasks_with_it_and_leaves_other_projects_alone()
+    {
+        var other = new Project { Id = Guid.NewGuid(), Title = "Winter Showcase" };
+        Projects.Add(other);
+        SeedTask(null);
+        SeedTask(null);
+        Tasks.Add(new ProjectTask { Id = Guid.NewGuid(), ProjectId = other.Id, Name = "Keep" });
+
+        Assert.True(await _service.DeleteProjectAsync(_projectId));
+
+        Assert.Single(Projects);
+        Assert.Equal("Keep", Assert.Single(Tasks).Name);
+        Assert.False(await _service.DeleteProjectAsync(_projectId));
+    }
 }

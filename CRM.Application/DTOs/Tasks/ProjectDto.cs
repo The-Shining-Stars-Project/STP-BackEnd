@@ -63,4 +63,21 @@ public class UpdateTaskDto
     public TaskStatus? TaskStatus { get; set; }
     public TaskPriority? Priority { get; set; }
     public DateTime? DueDate { get; set; }
+
+    /// <summary>
+    /// Null fields above mean "leave alone", so unassigning or removing a due date needs an
+    /// explicit flag (Oct 2026). A flag wins over a value sent in the same request.
+    /// </summary>
+    public bool ClearAssignee { get; set; }
+    public bool ClearDueDate { get; set; }
+}
+
+public class UpdateProjectDto
+{
+    public string? Title { get; set; }
+    public ProjectType? Type { get; set; }
+    public string? Status { get; set; }
+    public string? Scope { get; set; }
+    public DateTime? DueDate { get; set; }
+    public bool ClearDueDate { get; set; }
 }
