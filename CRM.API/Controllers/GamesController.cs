@@ -62,4 +62,12 @@ public class GamesController : ControllerBase
         var updated = await _service.UpdateAsync(id, dto);
         return updated is null ? NotFound() : Ok(updated);
     }
+
+    // Permanent, like scripts (client decision D13, Oct 2026). The service refuses to empty
+    // the library (409 with the reason) because the seeder would reload the defaults.
+    [HttpDelete("{id:guid}")]
+    [Authorize(Policy = "ManagementWrite")]
+    [Audited("game.delete", "Game")]
+    public async Task<IActionResult> DeleteGame(Guid id) =>
+        await _service.DeleteAsync(id) ? NoContent() : NotFound();
 }

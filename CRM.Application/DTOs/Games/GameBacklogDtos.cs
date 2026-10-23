@@ -46,3 +46,12 @@ public class CreateAgeModificationDto
     public Guid? TeacherSuggestedId { get; set; }
     public Guid? GameId { get; set; }
 }
+
+/// <summary>Full replace (Oct 2026): the edit form sends every field; a null GameId unlinks.</summary>
+public class UpdateAgeModificationDto
+{
+    public string GameName { get; set; } = string.Empty;
+    public string GroupAgeLevel { get; set; } = string.Empty;
+    public string Modification { get; set; } = string.Empty;
+    public Guid? GameId { get; set; }
+}

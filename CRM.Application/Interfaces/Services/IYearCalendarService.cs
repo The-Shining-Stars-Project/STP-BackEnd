@@ -11,4 +11,7 @@ public interface IYearCalendarService
     Task<CalendarThemeDto> UpsertThemeAsync(UpsertCalendarThemeDto dto);
 
     Task<IReadOnlyList<KeyArtsDateDto>> GetKeyArtsDatesAsync();
+
+    /// <summary>The key arts dates placed on real days of <paramref name="year"/> (see <c>KeyArtsDateResolver</c>).</summary>
+    Task<IReadOnlyList<ResolvedKeyArtsDateDto>> GetResolvedKeyArtsDatesAsync(int year);
 }

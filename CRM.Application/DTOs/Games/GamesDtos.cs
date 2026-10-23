@@ -35,6 +35,8 @@ public class GameDetailDto : GameSummaryDto
 {
     public string? Description { get; set; }
     public string? BestForVariations { get; set; }
+    /// <summary>Modifications teachers logged against this game (Oct 2026), newest first.</summary>
+    public List<AgeModificationDto> Modifications { get; set; } = new();
 }
 
 /// <summary>Server-side filter for the Games Library browser. All fields optional (AND-combined).</summary>

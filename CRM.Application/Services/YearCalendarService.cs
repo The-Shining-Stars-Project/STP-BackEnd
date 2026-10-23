@@ -46,6 +46,32 @@ public class YearCalendarService : IYearCalendarService
         return dates.OrderBy(k => k.Month).ThenBy(k => k.SortOrder).Select(ToDateDto).ToList();
     }
 
+    public async Task<IReadOnlyList<ResolvedKeyArtsDateDto>> GetResolvedKeyArtsDatesAsync(int year)
+    {
+        if (year is < 2000 or > 2100) throw new ArgumentException("Year must be between 2000 and 2100.");
+        var dates = await _uow.KeyArtsDates.GetAllAsync();
+        return dates
+            .OrderBy(k => k.Month).ThenBy(k => k.SortOrder)
+            .Select(k =>
+            {
+                var r = KeyArtsDateResolver.Resolve(k.DateText, k.Month, year);
+                return new ResolvedKeyArtsDateDto
+                {
+                    Id = k.Id,
+                    Month = k.Month,
+                    SortOrder = k.SortOrder,
+                    DateText = k.DateText,
+                    Observance = k.Observance,
+                    ObservanceType = k.ObservanceType,
+                    ProgrammingTieIn = k.ProgrammingTieIn,
+                    Start = r.Start?.ToString("yyyy-MM-dd"),
+                    End = r.End?.ToString("yyyy-MM-dd"),
+                    IsMonthLong = r.IsMonthLong,
+                };
+            })
+            .ToList();
+    }
+
     private static void Apply(CalendarTheme t, UpsertCalendarThemeDto dto)
     {
         t.ThemeTitle = dto.ThemeTitle;

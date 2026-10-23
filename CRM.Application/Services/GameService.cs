@@ -53,7 +53,61 @@ public class GameService : IGameService
     {
         var game = await _uow.Games.GetByIdAsync(id);
         if (game is null) return null;
-        return ToDetail(game, await LoadContextAsync());
+        var dto = ToDetail(game, await LoadContextAsync());
+
+        // Linked modifications ride along so the drawer needs one call (Oct 2026).
+        var mods = await _uow.AgeModifications.ListAsync(m => m.GameId == id);
+        if (mods.Count > 0)
+        {
+            var staff = (await _uow.Staff.GetAllAsync()).ToDictionary(s => s.Id, s => s.FullName);
+            dto.Modifications = mods
+                .OrderByDescending(m => m.CreatedAt)
+                .Select(m => new AgeModificationDto
+                {
+                    Id = m.Id,
+                    GameName = m.GameName,
+                    GroupAgeLevel = m.GroupAgeLevel,
+                    Modification = m.Modification,
+                    TeacherSuggested = m.TeacherSuggested,
+                    TeacherSuggestedId = m.TeacherSuggestedId,
+                    TeacherSuggestedName = m.TeacherSuggestedId is { } sid ? staff.GetValueOrDefault(sid) : null,
+                    GameId = m.GameId,
+                })
+                .ToList();
+        }
+        return dto;
+    }
+
+    public async Task<bool> DeleteAsync(Guid id)
+    {
+        var game = await _uow.Games.GetByIdAsync(id);
+        if (game is null) return false;
+
+        // DataSeeder.SeedGamesLibraryAsync runs in every environment and its only guard is
+        // "any game exists" — an empty table reloads the whole default library on restart.
+        if ((await _uow.Games.GetAllAsync()).Count <= 1)
+            throw new InvalidOperationException("The library can't be emptied — add the replacement activity before deleting this one.");
+
+        foreach (var sg in await _uow.GameSubGoals.ListAsync(sg => sg.GameId == id))
+            await _uow.GameSubGoals.DeleteAsync(sg);
+
+        // Keep the running log of modifications; they just lose the link.
+        foreach (var mod in await _uow.AgeModifications.ListAsync(m => m.GameId == id))
+        {
+            mod.GameId = null;
+            await _uow.AgeModifications.UpdateAsync(mod);
+        }
+
+        // The idea this game was promoted from goes back to To Develop.
+        foreach (var idea in await _uow.GameIdeas.ListAsync(i => i.PromotedGameId == id))
+        {
+            idea.PromotedGameId = null;
+            await _uow.GameIdeas.UpdateAsync(idea);
+        }
+
+        await _uow.Games.DeleteAsync(game);
+        await _uow.SaveChangesAsync();
+        return true;
     }
 
     public async Task<GameDetailDto> CreateAsync(CreateGameDto dto)

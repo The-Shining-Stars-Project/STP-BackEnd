@@ -38,6 +38,16 @@ public class GameBacklogController : ControllerBase
         return result is null ? NotFound() : Ok(result);
     }
 
+    /// <summary>Undoes a promote: deletes the library game it created and returns the idea to To Develop.</summary>
+    [HttpPost("ideas/{id:guid}/demote")]
+    [Authorize(Policy = "ManagementWrite")]
+    [Audited("gameidea.demote", "GameIdea")]
+    public async Task<ActionResult<GameIdeaDto>> Demote(Guid id)
+    {
+        var result = await _service.DemoteIdeaAsync(id);
+        return result is null ? NotFound() : Ok(result);
+    }
+
     [HttpGet("age-mods")]
     public async Task<ActionResult<IReadOnlyList<AgeModificationDto>>> GetAgeMods() => Ok(await _service.GetAgeModsAsync());
 
@@ -49,4 +59,21 @@ public class GameBacklogController : ControllerBase
             return BadRequest("Game name and modification are required.");
         return Ok(await _service.CreateAgeModAsync(dto));
     }
+
+    // Editing and deleting someone's logged modification is management work (client decision
+    // D14, Oct 2026); logging one stays open to teachers.
+    [HttpPut("age-mods/{id:guid}")]
+    [Authorize(Policy = "ManagementWrite")]
+    [Audited("agemod.update", "AgeModification")]
+    public async Task<ActionResult<AgeModificationDto>> UpdateAgeMod(Guid id, [FromBody] UpdateAgeModificationDto dto)
+    {
+        var result = await _service.UpdateAgeModAsync(id, dto);
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    [HttpDelete("age-mods/{id:guid}")]
+    [Authorize(Policy = "ManagementWrite")]
+    [Audited("agemod.delete", "AgeModification")]
+    public async Task<IActionResult> DeleteAgeMod(Guid id) =>
+        await _service.DeleteAgeModAsync(id) ? NoContent() : NotFound();
 }

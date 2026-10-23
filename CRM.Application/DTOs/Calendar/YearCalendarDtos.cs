@@ -45,3 +45,16 @@ public class YearCalendarDto
     public List<CalendarThemeDto> Themes { get; set; } = new();
     public List<KeyArtsDateDto> KeyArtsDates { get; set; } = new();
 }
+
+/// <summary>
+/// A key arts date placed in a specific year (Oct 2026, for the calendar's Annual Planning
+/// layer). <see cref="Start"/>/<see cref="End"/> are yyyy-MM-dd, or null when the text
+/// couldn't be read ("Varies") — such dates still belong to their month.
+/// </summary>
+public class ResolvedKeyArtsDateDto : KeyArtsDateDto
+{
+    public string? Start { get; set; }
+    public string? End { get; set; }
+    /// <summary>Covers the whole month or more: show in the month banner, not on a day.</summary>
+    public bool IsMonthLong { get; set; }
+}

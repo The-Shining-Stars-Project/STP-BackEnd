@@ -22,6 +22,11 @@ public class YearCalendarController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<KeyArtsDateDto>>> GetKeyArtsDates() =>
         Ok(await _service.GetKeyArtsDatesAsync());
 
+    /// <summary>The key arts dates placed on real days of a year, for the calendar's Annual Planning layer (Oct 2026).</summary>
+    [HttpGet("key-arts-dates/resolved")]
+    public async Task<ActionResult<IReadOnlyList<ResolvedKeyArtsDateDto>>> GetResolvedKeyArtsDates([FromQuery] int year) =>
+        Ok(await _service.GetResolvedKeyArtsDatesAsync(year));
+
     [HttpPut("theme")]
     [Authorize(Policy = "ManagementWrite")]
     [Audited("calendar.theme.update", "CalendarTheme")]
