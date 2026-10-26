@@ -36,18 +36,23 @@ public class CalendarController : ControllerBase
         return Ok(result);
     }
 
+    // Repeating events (Oct 2026): ?scope=all|this|following&occurrence=yyyy-MM-dd says which part
+    // of the series to change. Omitted = all, which is the pre-Repeat behaviour.
     [HttpPut("events/{id:guid}")]
     [Authorize(Policy = "ManagementWrite")]
     [Audited("calendar.event.update", "CalendarEvent")]
-    public async Task<ActionResult<CalendarEventDto>> UpdateEvent(Guid id, [FromBody] UpdateCalendarEventDto dto)
+    public async Task<ActionResult<CalendarEventDto>> UpdateEvent(
+        Guid id, [FromBody] UpdateCalendarEventDto dto,
+        [FromQuery] EventEditScope scope = EventEditScope.All, [FromQuery] DateOnly? occurrence = null)
     {
-        var result = await _service.UpdateEventAsync(id, dto);
+        var result = await _service.UpdateEventAsync(id, dto, scope, occurrence);
         return result is null ? NotFound() : Ok(result);
     }
 
     [HttpDelete("events/{id:guid}")]
     [Authorize(Policy = "ManagementWrite")]
     [Audited("calendar.event.delete", "CalendarEvent")]
-    public async Task<IActionResult> DeleteEvent(Guid id) =>
-        await _service.DeleteEventAsync(id) ? NoContent() : NotFound();
+    public async Task<IActionResult> DeleteEvent(
+        Guid id, [FromQuery] EventEditScope scope = EventEditScope.All, [FromQuery] DateOnly? occurrence = null) =>
+        await _service.DeleteEventAsync(id, scope, occurrence) ? NoContent() : NotFound();
 }

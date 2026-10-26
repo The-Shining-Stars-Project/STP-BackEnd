@@ -37,6 +37,7 @@ public interface IUnitOfWork
     IRepository<AttendanceNote> AttendanceNotes { get; }
     IRepository<Session> Sessions { get; }
     IRepository<CalendarEvent> CalendarEvents { get; }
+    IRepository<CalendarEventSkip> CalendarEventSkips { get; }
     IRepository<Project> Projects { get; }
     IRepository<ProjectTask> Tasks { get; }
     IRepository<Script> Scripts { get; }

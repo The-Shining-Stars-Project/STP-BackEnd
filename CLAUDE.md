@@ -100,6 +100,14 @@ implementing Application interfaces.
   org-local `CompletedAt`); re-saving a Done task never re-credits it, reopening clears it. The
   Completed-by report feeds staff evaluations, so it's ManagementWrite. Rows with
   `CompletionEstimated` were backfilled from the audit log and must stay labelled as estimates.
+- **Repeat** (events and tasks) runs on `RecurrenceRule`, a pure function. There are no background
+  jobs (Always On is off): a repeating `CalendarEvent` is stored once and expanded per month at
+  read time, minus `CalendarEventSkips`; edits/deletes take `scope=all|this|following` plus the
+  occurrence date. A repeating task needs a due date, and the next one is created only when the
+  current one moves into Done, from `RepeatAnchor` so month-end dates don't drift. Re-sending an
+  unchanged rule must not re-anchor it.
+- Migrations run BEFORE the API push, so for a few minutes the OLD API runs on the NEW schema.
+  Keep them additive with DB defaults; drop columns only in a later release, after nothing reads them.
 
 ## Before handing work back
 

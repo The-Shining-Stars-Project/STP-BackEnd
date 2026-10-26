@@ -37,6 +37,12 @@ public class ProjectTaskDto
     /// <summary>Org-local time, yyyy-MM-ddTHH:mm.</summary>
     public string? CompletedAt { get; set; }
     public bool CompletionEstimated { get; set; }
+
+    public RepeatFrequency RepeatFrequency { get; set; }
+    public int RepeatInterval { get; set; } = 1;
+    /// <summary>0 = Sunday … 6 = Saturday (Weekly only).</summary>
+    public List<int> RepeatWeekdays { get; set; } = new();
+    public string? RepeatUntil { get; set; }
 }
 
 public class CreateProjectDto
@@ -63,6 +69,12 @@ public class CreateTaskDto
     public TaskStatus? Status { get; set; }
 
     public TaskRole? Role { get; set; }
+
+    /// <summary>Repeat (Oct 2026). A repeating task needs a DueDate. Omitted = None.</summary>
+    public RepeatFrequency? RepeatFrequency { get; set; }
+    public int? RepeatInterval { get; set; }
+    public List<int>? RepeatWeekdays { get; set; }
+    public DateTime? RepeatUntil { get; set; }
 }
 
 public class UpdateTaskDto
@@ -83,6 +95,15 @@ public class UpdateTaskDto
 
     public TaskRole? Role { get; set; }
     public bool ClearRole { get; set; }
+
+    /// <summary>
+    /// Repeat (Oct 2026). Null RepeatFrequency = leave the rule alone; None = stop repeating.
+    /// When RepeatFrequency is sent, the other three are taken as the whole new rule.
+    /// </summary>
+    public RepeatFrequency? RepeatFrequency { get; set; }
+    public int? RepeatInterval { get; set; }
+    public List<int>? RepeatWeekdays { get; set; }
+    public DateTime? RepeatUntil { get; set; }
 }
 
 /// <summary>

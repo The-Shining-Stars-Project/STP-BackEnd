@@ -38,6 +38,22 @@ public class ProjectTask : BaseEntity
     /// </summary>
     public bool CompletionEstimated { get; set; }
 
+    // Repeat (Oct 2026). A repeating task needs a DueDate: when it is marked Done, the next one
+    // is created due on the next occurrence after this DueDate (see TaskService). Nothing is
+    // generated on a timer. Same rule shape as CalendarEvent.
+    public RepeatFrequency RepeatFrequency { get; set; } = RepeatFrequency.None;
+    public int RepeatInterval { get; set; } = 1;
+    public int RepeatWeekdays { get; set; }
+    public DateTime? RepeatUntil { get; set; }
+    /// <summary>
+    /// The due date the rule was set on; every next task is computed from it, not from the previous
+    /// task's due date, so "monthly on the 31st" goes Jan 31 → Feb 28 → Mar 31 instead of drifting
+    /// to the 28th. Copied to each spawned task.
+    /// </summary>
+    public DateTime? RepeatAnchor { get; set; }
+    /// <summary>The task whose completion created this one; also guards against spawning twice.</summary>
+    public Guid? RecurrenceParentId { get; set; }
+
     public Project Project { get; set; } = null!;
     public StaffMember? AssignedTo { get; set; }
 }

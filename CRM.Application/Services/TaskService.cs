@@ -2,11 +2,12 @@ using CRM.Application.DTOs.Tasks;
 using CRM.Application.Interfaces;
 using CRM.Application.Interfaces.Services;
 using CRM.Domain.Entities;
+using CRM.Domain.Enums;
 using TaskStatus = CRM.Domain.Enums.TaskStatus;
 
 namespace CRM.Application.Services;
 
-public class TaskService : ITaskService
+public partial class TaskService : ITaskService
 {
     private readonly IUnitOfWork _uow;
     private readonly IOrgClock _clock;
@@ -91,6 +92,7 @@ public class TaskService : ITaskService
         var status = dto.Status ?? TaskStatus.Upcoming;
         if (status is not (TaskStatus.Upcoming or TaskStatus.InProgress or TaskStatus.Blocked or TaskStatus.Draft))
             throw new ArgumentException("A new task can only start as Upcoming, In progress, Blocked or Draft.");
+        var rule = RuleFromForm(dto.RepeatFrequency, dto.RepeatInterval, dto.RepeatWeekdays, dto.RepeatUntil, dto.DueDate);
 
         var task = new ProjectTask
         {
@@ -103,6 +105,7 @@ public class TaskService : ITaskService
             DueDate = dto.DueDate,
             Role = dto.Role,
         };
+        SetRule(task, rule);
 
         await _uow.Tasks.AddAsync(task);
         await _uow.SaveChangesAsync();
@@ -115,6 +118,7 @@ public class TaskService : ITaskService
         var task = await _uow.Tasks.GetByIdAsync(taskId);
         if (task is null) return null;
         var wasDone = task.Status == TaskStatus.Done;
+        var dueBefore = task.DueDate;
 
         if (dto.Name is not null)
         {
@@ -133,6 +137,24 @@ public class TaskService : ITaskService
         if (dto.ClearRole) task.Role = null;
         else if (dto.Role.HasValue) task.Role = dto.Role;
 
+        // Repeat: a sent frequency replaces the whole rule (None stops it) and re-anchors it on the
+        // current due date. Either way a repeating task must keep a due date to repeat from.
+        if (dto.RepeatFrequency.HasValue)
+        {
+            // The edit form sends the rule on every save. Only an actual change (or a moved due
+            // date) re-anchors it — re-anchoring a Feb 28 instance of "monthly on the 31st" just
+            // because its name was edited would bring the month-end drift back.
+            var rule = RuleFromForm(dto.RepeatFrequency, dto.RepeatInterval, dto.RepeatWeekdays, dto.RepeatUntil, task.DueDate);
+            var unchanged = rule.Frequency == task.RepeatFrequency
+                && rule.SafeInterval == Math.Max(1, task.RepeatInterval)
+                && rule.WeekdayMask == task.RepeatWeekdays
+                && rule.Until == (task.RepeatUntil is { } u ? DateOnly.FromDateTime(u) : null)
+                && task.DueDate == dueBefore;
+            if (!unchanged) SetRule(task, rule);
+        }
+        else if (task.RepeatFrequency != RepeatFrequency.None && task.DueDate is null)
+            throw new ArgumentException("A repeating task needs a due date. Set one, or turn Repeat off.");
+
         // Who finished it (Oct 2026, for evaluations). Only the transition counts: re-saving a
         // Done task (fixing a typo) must not hand the credit to whoever made the edit.
         var isDone = task.Status == TaskStatus.Done;
@@ -141,6 +163,7 @@ public class TaskService : ITaskService
             task.CompletedByUserId = userId;
             task.CompletedAt = _clock.Now;
             task.CompletionEstimated = false;
+            await SpawnNextAsync(task);
         }
         else if (!isDone && wasDone)
         {
@@ -291,6 +314,114 @@ public class TaskService : ITaskService
         return member is not null ? new() { [member.Id] = member } : new();
     }
 
+    public async Task<ProjectDto?> CopyProjectToNextYearAsync(Guid projectId)
+    {
+        var source = await _uow.Projects.GetByIdAsync(projectId);
+        if (source is null) return null;
+
+        var nextYear = (source.DueDate ?? _clock.Today).Year + 1;
+        var bumped = YearInTitle().Replace(source.Title, m => (int.Parse(m.Value) + 1).ToString());
+        var copy = new Project
+        {
+            Title = bumped != source.Title ? bumped : $"{source.Title} ({nextYear})",
+            Type = source.Type,
+            Status = "planning",
+            Scope = source.Scope,
+            DueDate = source.DueDate?.AddYears(1),
+        };
+        await _uow.Projects.AddAsync(copy);
+
+        var tasks = await _uow.Tasks.ListAsync(t => t.ProjectId == projectId);
+        // A repeating task that already spawned its next one has been superseded; copying it too
+        // would duplicate the chain. Copy each chain's latest task and every one-off.
+        var superseded = tasks.Where(t => t.RecurrenceParentId is not null).Select(t => t.RecurrenceParentId!.Value).ToHashSet();
+        var current = (await _uow.Staff.GetAllAsync()).Where(s => s.EndDate is null).Select(s => s.Id).ToHashSet();
+        foreach (var t in tasks.Where(t => !superseded.Contains(t.Id)))
+        {
+            await _uow.Tasks.AddAsync(new ProjectTask
+            {
+                ProjectId = copy.Id,
+                Name = t.Name,
+                Context = t.Context,
+                Priority = t.Priority,
+                Role = t.Role,
+                Status = t.Status == TaskStatus.Draft ? TaskStatus.Draft : TaskStatus.Upcoming,
+                DueDate = t.DueDate?.AddYears(1),
+                AssignedToId = t.AssignedToId is { } a && current.Contains(a) ? a : null,
+                RepeatFrequency = t.RepeatFrequency,
+                RepeatInterval = t.RepeatInterval,
+                RepeatWeekdays = t.RepeatWeekdays,
+                RepeatUntil = t.RepeatUntil?.AddYears(1),
+                RepeatAnchor = t.RepeatAnchor?.AddYears(1),
+            });
+        }
+        await _uow.SaveChangesAsync();
+
+        return (await GetProjectsAsync()).Single(p => p.Id == copy.Id);
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\b20\d{2}\b")]
+    private static partial System.Text.RegularExpressions.Regex YearInTitle();
+
+    // ── Repeat (Oct 2026) ───────────────────────────────────────────────────────
+
+    private static RecurrenceRule.Rule RuleFromForm(RepeatFrequency? frequency, int? interval, List<int>? weekdays, DateTime? until, DateTime? dueDate)
+    {
+        var f = frequency ?? RepeatFrequency.None;
+        if (f == RepeatFrequency.None) return new RecurrenceRule.Rule(RepeatFrequency.None, 1, 0, null);
+        if (dueDate is null) throw new ArgumentException("A repeating task needs a due date to repeat from.");
+        var start = DateOnly.FromDateTime(dueDate.Value);
+        return RecurrenceRule.Validate(f, interval, weekdays, until is { } u ? DateOnly.FromDateTime(u) : null, start);
+    }
+
+    private static void SetRule(ProjectTask task, RecurrenceRule.Rule rule)
+    {
+        task.RepeatFrequency = rule.Frequency;
+        task.RepeatInterval = rule.SafeInterval;
+        task.RepeatWeekdays = rule.WeekdayMask;
+        task.RepeatUntil = rule.Until?.ToDateTime(TimeOnly.MinValue);
+        task.RepeatAnchor = rule.Repeats ? task.DueDate?.Date : null;
+    }
+
+    /// <summary>
+    /// When a repeating task is marked Done, create the next one due on the next occurrence after
+    /// this one's due date (computed from the anchor so month-end dates don't drift). Nothing
+    /// happens once RepeatUntil has passed, and a task that already spawned never spawns again —
+    /// so un-checking and re-checking it doesn't create a duplicate. Former staff are not carried over.
+    /// </summary>
+    private async Task SpawnNextAsync(ProjectTask done)
+    {
+        if (done.RepeatFrequency == RepeatFrequency.None || done.DueDate is not { } due) return;
+        if (await _uow.Tasks.FirstOrDefaultAsync(t => t.RecurrenceParentId == done.Id) is not null) return;
+
+        var rule = new RecurrenceRule.Rule(done.RepeatFrequency, done.RepeatInterval, done.RepeatWeekdays,
+            done.RepeatUntil is { } u ? DateOnly.FromDateTime(u) : null);
+        var anchor = DateOnly.FromDateTime(done.RepeatAnchor ?? due);
+        if (RecurrenceRule.NextAfter(anchor, rule, DateOnly.FromDateTime(due)) is not { } next) return;
+
+        Guid? assignee = null;
+        if (done.AssignedToId is { } staffId && await _uow.Staff.GetByIdAsync(staffId) is { EndDate: null })
+            assignee = staffId;
+
+        await _uow.Tasks.AddAsync(new ProjectTask
+        {
+            ProjectId = done.ProjectId,
+            Name = done.Name,
+            Context = done.Context,
+            Priority = done.Priority,
+            Role = done.Role,
+            AssignedToId = assignee,
+            Status = TaskStatus.Upcoming,
+            DueDate = next.ToDateTime(TimeOnly.MinValue),
+            RepeatFrequency = done.RepeatFrequency,
+            RepeatInterval = done.RepeatInterval,
+            RepeatWeekdays = done.RepeatWeekdays,
+            RepeatUntil = done.RepeatUntil,
+            RepeatAnchor = anchor.ToDateTime(TimeOnly.MinValue),
+            RecurrenceParentId = done.Id,
+        });
+    }
+
     /// <summary>Full names for the given user ids. Missing ids (deleted accounts) are simply absent.</summary>
     private async Task<Dictionary<Guid, string>> UserNamesAsync(IEnumerable<Guid?> ids, CancellationToken ct = default)
     {
@@ -325,6 +456,10 @@ public class TaskService : ITaskService
             CompletedByName = NameOf(t.CompletedByUserId, userNames),
             CompletedAt = t.CompletedAt?.ToString("yyyy-MM-ddTHH:mm"),
             CompletionEstimated = t.CompletionEstimated,
+            RepeatFrequency = t.RepeatFrequency,
+            RepeatInterval = Math.Max(1, t.RepeatInterval),
+            RepeatWeekdays = RecurrenceRule.WeekdaysOf(t.RepeatWeekdays),
+            RepeatUntil = t.RepeatUntil?.ToString("yyyy-MM-dd"),
         };
     }
 }

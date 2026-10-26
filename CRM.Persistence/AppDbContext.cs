@@ -28,6 +28,7 @@ public class AppDbContext : DbContext
     public DbSet<PerStarPlan> PerStarPlans { get; set; }
     public DbSet<CalendarTheme> CalendarThemes { get; set; }
     public DbSet<KeyArtsDate> KeyArtsDates { get; set; }
+    public DbSet<CalendarEventSkip> CalendarEventSkips { get; set; }
     public DbSet<Participant> Participants { get; set; }
     public DbSet<Volunteer> Volunteers { get; set; }
     public DbSet<StaffMember> Staff { get; set; }

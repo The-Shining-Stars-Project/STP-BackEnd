@@ -42,6 +42,7 @@ public class UnitOfWork : IUnitOfWork
         AttendanceNotes = new GenericRepository<AttendanceNote>(db);
         Sessions = new GenericRepository<Session>(db);
         CalendarEvents = new GenericRepository<CalendarEvent>(db);
+        CalendarEventSkips = new GenericRepository<CalendarEventSkip>(db);
         Projects = new GenericRepository<Project>(db);
         Tasks = new GenericRepository<ProjectTask>(db);
         Scripts = new GenericRepository<Script>(db);
@@ -84,6 +85,7 @@ public class UnitOfWork : IUnitOfWork
     public IRepository<AttendanceNote> AttendanceNotes { get; }
     public IRepository<Session> Sessions { get; }
     public IRepository<CalendarEvent> CalendarEvents { get; }
+    public IRepository<CalendarEventSkip> CalendarEventSkips { get; }
     public IRepository<Project> Projects { get; }
     public IRepository<ProjectTask> Tasks { get; }
     public IRepository<Script> Scripts { get; }

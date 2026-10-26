@@ -90,6 +90,16 @@ public class TasksController : ControllerBase
         return result is null ? NotFound() : Ok(result);
     }
 
+    /// <summary>Copy an annual project to next year (Oct 2026): dates +1 year, tasks reset to Upcoming.</summary>
+    [HttpPost("projects/{projectId:guid}/copy-to-next-year")]
+    [Authorize(Policy = "ManagementWrite")]
+    [Audited("project.copy", "Project", IdRouteKey = "projectId")]
+    public async Task<ActionResult<ProjectDto>> CopyProjectToNextYear(Guid projectId)
+    {
+        var result = await _service.CopyProjectToNextYearAsync(projectId);
+        return result is null ? NotFound() : Ok(result);
+    }
+
     /// <summary>Removes the project and every task in it.</summary>
     [HttpDelete("projects/{projectId:guid}")]
     [Authorize(Policy = "ManagementWrite")]

@@ -239,6 +239,24 @@ namespace CRM.Persistence.Migrations
                     b.Property<Guid?>("ProgramId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int>("RepeatFrequency")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<int>("RepeatInterval")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
+                    b.Property<DateTime?>("RepeatUntil")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("RepeatWeekdays")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
                     b.Property<string>("TimeRange")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
@@ -271,6 +289,32 @@ namespace CRM.Persistence.Migrations
                     b.HasIndex("SiteId");
 
                     b.ToTable("CalendarEventSites", (string)null);
+                });
+
+            modelBuilder.Entity("CRM.Domain.Entities.CalendarEventSkip", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CalendarEventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CalendarEventId", "Date")
+                        .IsUnique();
+
+                    b.ToTable("CalendarEventSkips", (string)null);
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.CalendarTheme", b =>
@@ -1425,6 +1469,30 @@ namespace CRM.Persistence.Migrations
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("RecurrenceParentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("RepeatAnchor")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("RepeatFrequency")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<int>("RepeatInterval")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
+                    b.Property<DateTime?>("RepeatUntil")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("RepeatWeekdays")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
                     b.Property<int?>("Role")
                         .HasColumnType("int");
 
@@ -1441,6 +1509,8 @@ namespace CRM.Persistence.Migrations
                     b.HasIndex("CompletedAt");
 
                     b.HasIndex("ProjectId");
+
+                    b.HasIndex("RecurrenceParentId");
 
                     b.ToTable("Tasks");
                 });
@@ -2232,6 +2302,17 @@ namespace CRM.Persistence.Migrations
                     b.Navigation("Site");
                 });
 
+            modelBuilder.Entity("CRM.Domain.Entities.CalendarEventSkip", b =>
+                {
+                    b.HasOne("CRM.Domain.Entities.CalendarEvent", "CalendarEvent")
+                        .WithMany("Skips")
+                        .HasForeignKey("CalendarEventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CalendarEvent");
+                });
+
             modelBuilder.Entity("CRM.Domain.Entities.DocumentRecord", b =>
                 {
                     b.HasOne("CRM.Domain.Entities.Participant", "Participant")
@@ -2705,6 +2786,8 @@ namespace CRM.Persistence.Migrations
             modelBuilder.Entity("CRM.Domain.Entities.CalendarEvent", b =>
                 {
                     b.Navigation("Sites");
+
+                    b.Navigation("Skips");
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.CrmProgram", b =>

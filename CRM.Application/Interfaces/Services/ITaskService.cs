@@ -31,4 +31,11 @@ public interface ITaskService
     Task<ProjectDto?> UpdateProjectAsync(Guid projectId, UpdateProjectDto dto);
     /// <summary>Removes the project and every task in it.</summary>
     Task<bool> DeleteProjectAsync(Guid projectId);
+
+    /// <summary>
+    /// "Copy to next year" (Oct 2026) for annual projects like ASCAP Reporting: a new project with
+    /// every date a year later, a year in the title bumped (2026 → 2027), and each task back to
+    /// Upcoming with no completer. Assignees are kept only if they're still current staff.
+    /// </summary>
+    Task<ProjectDto?> CopyProjectToNextYearAsync(Guid projectId);
 }

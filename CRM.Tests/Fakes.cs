@@ -105,6 +105,7 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
     public IRepository<AttendanceNote> AttendanceNotes { get; } = new FakeRepository<AttendanceNote>();
     public IRepository<Session> Sessions { get; } = new FakeRepository<Session>();
     public IRepository<CalendarEvent> CalendarEvents { get; } = new FakeRepository<CalendarEvent>();
+    public IRepository<CalendarEventSkip> CalendarEventSkips { get; } = new FakeRepository<CalendarEventSkip>();
     public IRepository<Project> Projects { get; } = new FakeRepository<Project>();
     public IRepository<ProjectTask> Tasks { get; } = new FakeRepository<ProjectTask>();
     public IRepository<Script> Scripts { get; } = new FakeRepository<Script>();
