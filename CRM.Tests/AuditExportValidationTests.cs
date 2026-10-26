@@ -35,6 +35,7 @@ public class AuditExportValidationTests
     [InlineData("participant-roster")]
     [InlineData("stars-detail")]
     [InlineData("staff-onboarding")]
+    [InlineData("task-completions")]
     public void Accepts_every_kind_the_frontend_actually_exports(string kind)
     {
         var dto = Valid();

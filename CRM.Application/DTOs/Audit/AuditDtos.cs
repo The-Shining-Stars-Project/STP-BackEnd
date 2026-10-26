@@ -83,6 +83,7 @@ public static class ExportAuditValidation
         "participant-roster",
         "stars-detail",
         "staff-onboarding",
+        "task-completions", // Tasks → Completed by (Oct 2026): who finished what, per month
     ];
 
     public const int MaxRowCount = 1_000_000;

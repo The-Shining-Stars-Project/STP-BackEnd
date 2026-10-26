@@ -29,6 +29,14 @@ public class ProjectTaskDto
 
     /// <summary>Computed when read: past its due date and not Done (see <c>TaskService.IsOverdue</c>).</summary>
     public bool IsOverdue { get; set; }
+
+    public TaskRole? Role { get; set; }
+    public Guid? CompletedByUserId { get; set; }
+    /// <summary>The completer's name, or "Former user" when the account has since been deleted.</summary>
+    public string? CompletedByName { get; set; }
+    /// <summary>Org-local time, yyyy-MM-ddTHH:mm.</summary>
+    public string? CompletedAt { get; set; }
+    public bool CompletionEstimated { get; set; }
 }
 
 public class CreateProjectDto
@@ -53,6 +61,8 @@ public class CreateTaskDto
     /// sent). Null means Upcoming. Only Upcoming, InProgress and Blocked are accepted.
     /// </summary>
     public TaskStatus? Status { get; set; }
+
+    public TaskRole? Role { get; set; }
 }
 
 public class UpdateTaskDto
@@ -70,6 +80,44 @@ public class UpdateTaskDto
     /// </summary>
     public bool ClearAssignee { get; set; }
     public bool ClearDueDate { get; set; }
+
+    public TaskRole? Role { get; set; }
+    public bool ClearRole { get; set; }
+}
+
+/// <summary>
+/// Finished tasks for one month, per person and per role (Oct 2026, for annual evaluations).
+/// Months are org-local calendar months.
+/// </summary>
+public class TaskCompletionReportDto
+{
+    public int Year { get; set; }
+    public int Month { get; set; }
+    public List<TaskCompletionPersonDto> People { get; set; } = new();
+    public List<TaskCompletionItemDto> Items { get; set; } = new();
+}
+
+public class TaskCompletionPersonDto
+{
+    public Guid UserId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public int Total { get; set; }
+    /// <summary>How many of Total came from the audit-log backfill rather than being recorded.</summary>
+    public int Estimated { get; set; }
+    /// <summary>Count per role name ("SeniorTeachingArtist", …), plus "None" for tasks without a role.</summary>
+    public Dictionary<string, int> ByRole { get; set; } = new();
+}
+
+public class TaskCompletionItemDto
+{
+    public Guid TaskId { get; set; }
+    public string TaskName { get; set; } = string.Empty;
+    public string ProjectTitle { get; set; } = string.Empty;
+    public TaskRole? Role { get; set; }
+    public Guid UserId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string CompletedAt { get; set; } = string.Empty;
+    public bool Estimated { get; set; }
 }
 
 public class UpdateProjectDto

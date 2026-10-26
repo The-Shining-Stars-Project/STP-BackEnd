@@ -12,6 +12,9 @@ public class ProjectTaskConfiguration : IEntityTypeConfiguration<ProjectTask>
         builder.Property(t => t.Name).IsRequired().HasMaxLength(300);
         builder.Property(t => t.Context).HasMaxLength(500);
         builder.Property(t => t.IsOverdue).HasDefaultValue(false);
+        builder.Property(t => t.CompletionEstimated).HasDefaultValue(false);
+        // CompletedByUserId deliberately has no FK (see the entity). The report reads by month.
+        builder.HasIndex(t => t.CompletedAt);
 
         builder.HasOne(t => t.Project)
                .WithMany(p => p.Tasks)

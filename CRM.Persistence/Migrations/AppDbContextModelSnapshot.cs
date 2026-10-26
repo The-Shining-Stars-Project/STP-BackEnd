@@ -1388,6 +1388,17 @@ namespace CRM.Persistence.Migrations
                     b.Property<Guid?>("AssignedToId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CompletedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("CompletionEstimated")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("Context")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -1414,6 +1425,9 @@ namespace CRM.Persistence.Migrations
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int?>("Role")
+                        .HasColumnType("int");
+
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
@@ -1423,6 +1437,8 @@ namespace CRM.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AssignedToId");
+
+                    b.HasIndex("CompletedAt");
 
                     b.HasIndex("ProjectId");
 

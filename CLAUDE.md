@@ -94,6 +94,12 @@ implementing Application interfaces.
   own. Planning shows the latest EARLIER plan or roster row as a carry-over hint (none if that
   teacher has left; never a later term), and `POST /api/roster/copy-forward` fills a term's gaps.
 - Notifications are in-app only (no email).
+- Tasks can carry a `TaskRole` (job titles: Coordinator, Senior / Teaching / Assistant Teaching
+  Artist). These are NOT login roles. A role task with nobody assigned is the "grab bag"; anyone
+  may `take` it. The login that moves a task INTO Done is recorded (`CompletedByUserId`,
+  org-local `CompletedAt`); re-saving a Done task never re-credits it, reopening clears it. The
+  Completed-by report feeds staff evaluations, so it's ManagementWrite. Rows with
+  `CompletionEstimated` were backfilled from the audit log and must stay labelled as estimates.
 
 ## Before handing work back
 

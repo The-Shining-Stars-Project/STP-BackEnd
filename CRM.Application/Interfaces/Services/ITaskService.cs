@@ -7,7 +7,22 @@ public interface ITaskService
     Task<IReadOnlyList<ProjectDto>> GetProjectsAsync(CancellationToken ct = default);
     Task<ProjectDto> CreateProjectAsync(CreateProjectDto dto);
     Task<ProjectTaskDto> AddTaskAsync(Guid projectId, CreateTaskDto dto);
-    Task<ProjectTaskDto?> UpdateTaskAsync(Guid taskId, UpdateTaskDto dto);
+    /// <summary>
+    /// Moving a task to Done records <paramref name="userId"/> as its completer and stamps the
+    /// time; moving it out of Done clears both. Re-saving a task that is already Done keeps the
+    /// original completer.
+    /// </summary>
+    Task<ProjectTaskDto?> UpdateTaskAsync(Guid userId, Guid taskId, UpdateTaskDto dto);
+
+    /// <summary>
+    /// "Take it" on a grab-bag task: assigns it to the caller's linked staff record. Throws
+    /// InvalidOperationException (409) if the login has no current staff record or someone
+    /// else already has it. Null if the task doesn't exist.
+    /// </summary>
+    Task<ProjectTaskDto?> TakeTaskAsync(Guid userId, Guid taskId);
+
+    /// <summary>Tasks completed in an org-local calendar month, grouped per person and role.</summary>
+    Task<TaskCompletionReportDto> GetCompletionsAsync(int year, int month);
 
     // Oct 2026 (client: "finished tasks should disappear", "delete", "button happy"):
     // tasks and projects can be edited and removed. Deletes are permanent and management-only

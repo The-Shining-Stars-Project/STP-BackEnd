@@ -13,6 +13,7 @@ namespace CRM.Tests;
 public class TaskServiceTests
 {
     private static readonly DateTime Today = new(2026, 10, 16);
+    private static readonly Guid UserId = Guid.NewGuid();
 
     private readonly FakeUnitOfWork _uow = new();
     private readonly TaskService _service;
@@ -165,7 +166,7 @@ public class TaskServiceTests
             new CreateTaskDto { Name = "File the report", DueDate = Today.AddDays(-2) });
         Assert.True(added.IsOverdue);
 
-        var done = await _service.UpdateTaskAsync(added.Id, new UpdateTaskDto { TaskStatus = TaskStatus.Done });
+        var done = await _service.UpdateTaskAsync(UserId, added.Id, new UpdateTaskDto { TaskStatus = TaskStatus.Done });
         Assert.False(done!.IsOverdue);
     }
 
@@ -187,11 +188,11 @@ public class TaskServiceTests
         task.AssignedToId = staffId;
 
         // Null means "leave alone" — the modal sends only what changed.
-        await _service.UpdateTaskAsync(task.Id, new UpdateTaskDto { Name = "Renamed" });
+        await _service.UpdateTaskAsync(UserId, task.Id, new UpdateTaskDto { Name = "Renamed" });
         Assert.Equal(staffId, task.AssignedToId);
         Assert.NotNull(task.DueDate);
 
-        await _service.UpdateTaskAsync(task.Id, new UpdateTaskDto { ClearAssignee = true, ClearDueDate = true });
+        await _service.UpdateTaskAsync(UserId, task.Id, new UpdateTaskDto { ClearAssignee = true, ClearDueDate = true });
         Assert.Null(task.AssignedToId);
         Assert.Null(task.DueDate);
     }
@@ -200,7 +201,7 @@ public class TaskServiceTests
     public async Task A_blank_name_on_update_is_refused()
     {
         var task = SeedTask(null);
-        await Assert.ThrowsAsync<ArgumentException>(() => _service.UpdateTaskAsync(task.Id, new UpdateTaskDto { Name = "   " }));
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.UpdateTaskAsync(UserId, task.Id, new UpdateTaskDto { Name = "   " }));
         Assert.Equal("Task", task.Name);
     }
 

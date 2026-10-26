@@ -33,6 +33,7 @@ public class TaskService : ITaskService
         var tasks = await _uow.Tasks.GetAllAsync(ct);
         var staff = await _uow.Staff.GetAllAsync(ct);
         var staffMap = staff.ToDictionary(s => s.Id);
+        var names = await UserNamesAsync(tasks.Select(t => t.CompletedByUserId), ct);
         var tasksByProject = tasks.GroupBy(t => t.ProjectId).ToDictionary(g => g.Key, g => g.ToList());
         var today = _clock.Today;
 
@@ -45,7 +46,7 @@ public class TaskService : ITaskService
             Scope = p.Scope,
             DueDate = p.DueDate?.ToString("yyyy-MM-dd"),
             Tasks = tasksByProject.GetValueOrDefault(p.Id, new())
-                .Select(t => ToTaskDto(t, staffMap, today)).ToList(),
+                .Select(t => ToTaskDto(t, staffMap, names, today)).ToList(),
         }).ToList();
     }
 
@@ -100,18 +101,20 @@ public class TaskService : ITaskService
             Status = status,
             Priority = dto.Priority,
             DueDate = dto.DueDate,
+            Role = dto.Role,
         };
 
         await _uow.Tasks.AddAsync(task);
         await _uow.SaveChangesAsync();
 
-        return ToTaskDto(task, await BuildStaffMapAsync(task.AssignedToId), _clock.Today);
+        return ToTaskDto(task, await BuildStaffMapAsync(task.AssignedToId), new(), _clock.Today);
     }
 
-    public async Task<ProjectTaskDto?> UpdateTaskAsync(Guid taskId, UpdateTaskDto dto)
+    public async Task<ProjectTaskDto?> UpdateTaskAsync(Guid userId, Guid taskId, UpdateTaskDto dto)
     {
         var task = await _uow.Tasks.GetByIdAsync(taskId);
         if (task is null) return null;
+        var wasDone = task.Status == TaskStatus.Done;
 
         if (dto.Name is not null)
         {
@@ -127,11 +130,94 @@ public class TaskService : ITaskService
         if (dto.Priority.HasValue) task.Priority = dto.Priority.Value;
         if (dto.ClearDueDate) task.DueDate = null;
         else if (dto.DueDate.HasValue) task.DueDate = dto.DueDate;
+        if (dto.ClearRole) task.Role = null;
+        else if (dto.Role.HasValue) task.Role = dto.Role;
+
+        // Who finished it (Oct 2026, for evaluations). Only the transition counts: re-saving a
+        // Done task (fixing a typo) must not hand the credit to whoever made the edit.
+        var isDone = task.Status == TaskStatus.Done;
+        if (isDone && !wasDone)
+        {
+            task.CompletedByUserId = userId;
+            task.CompletedAt = _clock.Now;
+            task.CompletionEstimated = false;
+        }
+        else if (!isDone && wasDone)
+        {
+            task.CompletedByUserId = null;
+            task.CompletedAt = null;
+            task.CompletionEstimated = false;
+        }
 
         await _uow.Tasks.UpdateAsync(task);
         await _uow.SaveChangesAsync();
 
-        return ToTaskDto(task, await BuildStaffMapAsync(task.AssignedToId), _clock.Today);
+        return ToTaskDto(task, await BuildStaffMapAsync(task.AssignedToId),
+            await UserNamesAsync(new[] { task.CompletedByUserId }), _clock.Today);
+    }
+
+    public async Task<ProjectTaskDto?> TakeTaskAsync(Guid userId, Guid taskId)
+    {
+        var task = await _uow.Tasks.GetByIdAsync(taskId);
+        if (task is null) return null;
+
+        var user = await _uow.Users.GetByIdAsync(userId);
+        var staff = user?.StaffMemberId is { } staffId ? await _uow.Staff.GetByIdAsync(staffId) : null;
+        if (staff is null || staff.EndDate is not null)
+            throw new InvalidOperationException("Your login isn't linked to a current staff member, so tasks can't be assigned to you. Ask an admin to link it.");
+
+        if (task.AssignedToId == staff.Id)
+            return ToTaskDto(task, new() { [staff.Id] = staff }, await UserNamesAsync(new[] { task.CompletedByUserId }), _clock.Today);
+        if (task.AssignedToId is not null)
+            throw new InvalidOperationException("Someone already took this task. Refresh to see who.");
+
+        task.AssignedToId = staff.Id;
+        await _uow.Tasks.UpdateAsync(task);
+        await _uow.SaveChangesAsync();
+        return ToTaskDto(task, new() { [staff.Id] = staff }, await UserNamesAsync(new[] { task.CompletedByUserId }), _clock.Today);
+    }
+
+    public async Task<TaskCompletionReportDto> GetCompletionsAsync(int year, int month)
+    {
+        if (month is < 1 or > 12 || year is < 2000 or > 2100)
+            throw new ArgumentException("Choose a month between 2000 and 2100.");
+        var from = new DateTime(year, month, 1);
+        var to = from.AddMonths(1);
+
+        var done = await _uow.Tasks.ListAsync(t =>
+            t.CompletedByUserId != null && t.CompletedAt >= from && t.CompletedAt < to);
+        var projects = (await _uow.Projects.GetAllAsync()).ToDictionary(p => p.Id, p => p.Title);
+        var names = await UserNamesAsync(done.Select(t => t.CompletedByUserId));
+
+        var items = done
+            .OrderBy(t => t.CompletedAt)
+            .Select(t => new TaskCompletionItemDto
+            {
+                TaskId = t.Id,
+                TaskName = t.Name,
+                ProjectTitle = projects.GetValueOrDefault(t.ProjectId) ?? "",
+                Role = t.Role,
+                UserId = t.CompletedByUserId!.Value,
+                Name = NameOf(t.CompletedByUserId, names)!,
+                CompletedAt = t.CompletedAt!.Value.ToString("yyyy-MM-ddTHH:mm"),
+                Estimated = t.CompletionEstimated,
+            })
+            .ToList();
+
+        var people = items
+            .GroupBy(i => i.UserId)
+            .Select(g => new TaskCompletionPersonDto
+            {
+                UserId = g.Key,
+                Name = g.First().Name,
+                Total = g.Count(),
+                Estimated = g.Count(i => i.Estimated),
+                ByRole = g.GroupBy(i => i.Role?.ToString() ?? "None").ToDictionary(r => r.Key, r => r.Count()),
+            })
+            .OrderByDescending(p => p.Total).ThenBy(p => p.Name)
+            .ToList();
+
+        return new TaskCompletionReportDto { Year = year, Month = month, People = people, Items = items };
     }
 
     public async Task<bool> DeleteTaskAsync(Guid taskId)
@@ -170,6 +256,7 @@ public class TaskService : ITaskService
 
         var tasks = await _uow.Tasks.ListAsync(t => t.ProjectId == projectId);
         var staff = (await _uow.Staff.GetAllAsync()).ToDictionary(s => s.Id);
+        var names = await UserNamesAsync(tasks.Select(t => t.CompletedByUserId));
         var today = _clock.Today;
         return new ProjectDto
         {
@@ -179,7 +266,7 @@ public class TaskService : ITaskService
             Status = project.Status,
             Scope = project.Scope,
             DueDate = project.DueDate?.ToString("yyyy-MM-dd"),
-            Tasks = tasks.Select(t => ToTaskDto(t, staff, today)).ToList(),
+            Tasks = tasks.Select(t => ToTaskDto(t, staff, names, today)).ToList(),
         };
     }
 
@@ -204,7 +291,20 @@ public class TaskService : ITaskService
         return member is not null ? new() { [member.Id] = member } : new();
     }
 
-    private static ProjectTaskDto ToTaskDto(ProjectTask t, Dictionary<Guid, StaffMember> staffMap, DateTime today)
+    /// <summary>Full names for the given user ids. Missing ids (deleted accounts) are simply absent.</summary>
+    private async Task<Dictionary<Guid, string>> UserNamesAsync(IEnumerable<Guid?> ids, CancellationToken ct = default)
+    {
+        var wanted = ids.OfType<Guid>().ToHashSet();
+        if (wanted.Count == 0) return new();
+        var users = await _uow.Users.ListAsync(u => wanted.Contains(u.Id), ct);
+        return users.ToDictionary(u => u.Id, u => u.FullName);
+    }
+
+    // A completer whose account was deleted still counts; the row just can't name them.
+    private static string? NameOf(Guid? userId, Dictionary<Guid, string> names) =>
+        userId is { } id ? names.GetValueOrDefault(id) ?? "Former user" : null;
+
+    private static ProjectTaskDto ToTaskDto(ProjectTask t, Dictionary<Guid, StaffMember> staffMap, Dictionary<Guid, string> userNames, DateTime today)
     {
         var assignee = t.AssignedToId.HasValue ? staffMap.GetValueOrDefault(t.AssignedToId.Value) : null;
         return new ProjectTaskDto
@@ -220,6 +320,11 @@ public class TaskService : ITaskService
             Priority = t.Priority,
             DueDate = t.DueDate?.ToString("yyyy-MM-dd"),
             IsOverdue = IsOverdue(t, today),
+            Role = t.Role,
+            CompletedByUserId = t.CompletedByUserId,
+            CompletedByName = NameOf(t.CompletedByUserId, userNames),
+            CompletedAt = t.CompletedAt?.ToString("yyyy-MM-ddTHH:mm"),
+            CompletionEstimated = t.CompletionEstimated,
         };
     }
 }

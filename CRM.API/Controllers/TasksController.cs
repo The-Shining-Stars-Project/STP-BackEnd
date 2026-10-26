@@ -42,13 +42,36 @@ public class TasksController : ControllerBase
         return CreatedAtAction(nameof(GetProjects), new { }, result);
     }
 
+    // Marking a task Done records the caller as its completer (Oct 2026, for evaluations).
     [HttpPut("tasks/{taskId:guid}")]
     [Audited("task.update", "ProjectTask", IdRouteKey = "taskId")]
     public async Task<ActionResult<ProjectTaskDto>> UpdateTask(Guid taskId, [FromBody] UpdateTaskDto dto)
     {
-        var result = await _service.UpdateTaskAsync(taskId, dto);
+        var result = await _service.UpdateTaskAsync(User.GetUserId(), taskId, dto);
         return result is null ? NotFound() : Ok(result);
     }
+
+    /// <summary>
+    /// "Take it" on a grab-bag task (a role, nobody assigned): any signed-in staff member can
+    /// assign it to themselves. 409 if someone else got there first or the login has no staff record.
+    /// </summary>
+    [HttpPost("tasks/{taskId:guid}/take")]
+    [Audited("task.take", "ProjectTask", IdRouteKey = "taskId")]
+    public async Task<ActionResult<ProjectTaskDto>> TakeTask(Guid taskId)
+    {
+        var result = await _service.TakeTaskAsync(User.GetUserId(), taskId);
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    /// <summary>
+    /// Who completed what in a month, per person and role — Rachel's evaluation report. It names
+    /// individual staff and their output, so it is management-only, and reading it is audited.
+    /// </summary>
+    [HttpGet("tasks/completions")]
+    [Authorize(Policy = "ManagementWrite")]
+    [Audited("task.completions.read", "ProjectTask")]
+    public async Task<ActionResult<TaskCompletionReportDto>> GetCompletions([FromQuery] int year, [FromQuery] int month) =>
+        Ok(await _service.GetCompletionsAsync(year, month));
 
     // Deletes are permanent and management-only (client, Oct 2026: "button happy"). Teachers
     // mark a task Done instead, and Done tasks leave the default view.
