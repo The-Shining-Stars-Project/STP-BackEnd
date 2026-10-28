@@ -148,6 +148,18 @@ public class CalendarService : ICalendarService
 
     // ── Helpers ─────────────────────────────────────────────────────────────────
 
+    // Must match CalendarEventConfiguration's HasMaxLength values.
+    public const int MaxTitle = 300;
+    public const int MaxLocation = 200;
+    public const int MaxDetails = 300;
+    public const int MaxTime = 50;
+
+    private static void CheckLength(string? value, int max, string field)
+    {
+        if (value is not null && value.Length > max)
+            throw new ArgumentException($"{field} can be up to {max} characters (this one is {value.Length}). Shorten it and save again.");
+    }
+
     private static RecurrenceRule.Rule RuleOf(CalendarEvent e) =>
         new(e.RepeatFrequency, e.RepeatInterval, e.RepeatWeekdays, e.RepeatUntil is { } u ? DateOnly.FromDateTime(u) : null);
 
@@ -156,6 +168,13 @@ public class CalendarService : ICalendarService
     {
         var title = dto.Title?.Trim() ?? string.Empty;
         if (title.Length == 0) throw new ArgumentException("Title is required.");
+        // The column limits (CalendarEventConfiguration). Past them SQL refuses the row, which
+        // used to surface as "That change conflicts with data already saved" — Vera, Oct 21, with
+        // a trial write-up in Details. Say what's actually wrong instead.
+        CheckLength(title, MaxTitle, "Title");
+        CheckLength(dto.Location, MaxLocation, "Location");
+        CheckLength(dto.Meta, MaxDetails, "Details");
+        CheckLength(dto.TimeRange, MaxTime, "Time");
 
         var until = string.IsNullOrWhiteSpace(dto.RepeatUntil) ? (DateOnly?)null : ParseDate(dto.RepeatUntil, "repeat end date");
         var rule = oneOff

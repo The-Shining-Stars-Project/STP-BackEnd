@@ -64,11 +64,11 @@ public class TasksController : ControllerBase
     }
 
     /// <summary>
-    /// Who completed what in a month, per person and role — Rachel's evaluation report. It names
-    /// individual staff and their output, so it is management-only, and reading it is audited.
+    /// Who completed what in a month, per person and role — Rachel's evaluation report. Open to
+    /// every signed-in staff member by client decision (Rachel, Oct 27: "it's ok if these are
+    /// public, the team picks up tasks if others are absent"). Reading it is still audited.
     /// </summary>
     [HttpGet("tasks/completions")]
-    [Authorize(Policy = "ManagementWrite")]
     [Audited("task.completions.read", "ProjectTask")]
     public async Task<ActionResult<TaskCompletionReportDto>> GetCompletions([FromQuery] int year, [FromQuery] int month) =>
         Ok(await _service.GetCompletionsAsync(year, month));

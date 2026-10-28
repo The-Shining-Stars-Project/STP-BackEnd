@@ -150,6 +150,27 @@ public class RepeatingEventTests
     }
 
     [Fact]
+    public async Task Text_past_the_column_limits_is_a_clear_400_not_a_database_conflict()
+    {
+        // Vera, Oct 21: a trial write-up in Details failed as "conflicts with data already saved".
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => _calendar.CreateEventAsync(new CreateCalendarEventDto
+        {
+            Title = "Trial visit", Date = "2026-10-21", Meta = new string('x', CalendarService.MaxDetails + 1),
+        }));
+        Assert.Contains("Details can be up to 300 characters", ex.Message);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => _calendar.CreateEventAsync(new CreateCalendarEventDto
+        {
+            Title = "Trial visit", Date = "2026-10-21", TimeRange = new string('9', CalendarService.MaxTime + 1),
+        }));
+        Assert.Empty(Events);
+
+        // Exactly at the limit is fine.
+        await _calendar.CreateEventAsync(new CreateCalendarEventDto { Title = "Trial visit", Date = "2026-10-21", Meta = new string('x', CalendarService.MaxDetails) });
+        Assert.Single(Events);
+    }
+
+    [Fact]
     public async Task An_until_date_stops_the_series_in_the_month_view()
     {
         await Weekly(until: "2026-10-19");

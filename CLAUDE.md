@@ -98,7 +98,7 @@ implementing Application interfaces.
   Artist). These are NOT login roles. A role task with nobody assigned is the "grab bag"; anyone
   may `take` it. The login that moves a task INTO Done is recorded (`CompletedByUserId`,
   org-local `CompletedAt`); re-saving a Done task never re-credits it, reopening clears it. The
-  Completed-by report feeds staff evaluations, so it's ManagementWrite. Rows with
+  Completed-by report feeds evaluations but is open to all staff (client decision, Oct 2026). Rows with
   `CompletionEstimated` were backfilled from the audit log and must stay labelled as estimates.
 - **Repeat** (events and tasks) runs on `RecurrenceRule`, a pure function. There are no background
   jobs (Always On is off): a repeating `CalendarEvent` is stored once and expanded per month at
